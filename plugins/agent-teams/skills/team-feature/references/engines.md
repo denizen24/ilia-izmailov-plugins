@@ -3,9 +3,9 @@
 Every role in the pipeline is backed by an **engine**. The default engine for every role is
 `claude` (a normal Claude Code subagent / teammate) — **with no config file everything runs on
 Claude, exactly as before**. This file only matters when `~/.claude/agent-teams.json` exists and
-assigns a role to an external CLI agent (Codex, Kimi, Grok).
+assigns a role to an external CLI agent (Codex, Kimi, Grok, Cursor).
 
-**Why offload:** external CLIs bill against a different subscription (ChatGPT / Moonshot / xAI),
+**Why offload:** external CLIs bill against a different subscription (ChatGPT / Moonshot / xAI / Cursor),
 so work moved there consumes neither Claude context nor rate limit.
 
 ---
@@ -101,7 +101,8 @@ Any role not listed = `claude`.
 These ship with the plugin. Users only override them when a CLI changes its flags.
 
 Flags, models and session mechanics below were smoke-tested against codex-cli 0.146.0, kimi-code/k3
-and grok-4.6 (2026-08-17): each engine answered a prompt and correctly recalled it after a resume.
+and grok-4.6 (2026-08-17) and Cursor Agent CLI 2026.09.02 (2026-09-08): each engine answered a
+prompt and correctly recalled it after a resume.
 **Re-verify after CLI upgrades** — model names and resume flags do change.
 
 **Judging success:** use the process exit code and whether a model reply is present. Do NOT treat
@@ -156,6 +157,44 @@ one conversation. So mint one id per role (`uuidgen`) before the first call, reu
 resume, and save it to the role's `session.txt` immediately — regenerating it later loses the
 conversation. It MUST be a real UUID: a readable name like `grok-myteam-coder` is rejected — Grok
 fails to start (observed in a live run on 2026-08-17).
+
+### cursor
+
+```
+cmd:     agent -p --trust --output-format json --model {model} {mode_flags} "$(cat {prompt_file})"
+resume:  agent -p --trust --output-format json --model {model} {mode_flags} --resume {session} "$(cat {prompt_file})"
+model:   cursor-grok-4.6-xhigh
+mode:    read → --mode ask, write → --sandbox enabled -f
+session: extract from the JSON reply, field `"session_id": "<uuid>"`
+result:  the `result` field of the same JSON
+```
+
+Cursor Agent CLI (`agent`, also installed as `cursor-agent`; smoke-tested against 2026.09.02).
+Runs on a Cursor subscription — no separate token bill.
+
+`--trust` is MANDATORY — without it the CLI stops on the "do you trust this folder?" question in
+non-interactive mode and does nothing.
+
+**Read mode is real.** `--mode ask` was verified by instructing it to create a file: it refused and
+no file appeared. That makes `cursor` safe for read-only roles without relying on a sandbox flag.
+For write-capable roles (`risk-tester`) use `--sandbox enabled -f`.
+
+**Sessions:** Cursor prints the id itself, in the `session_id` field of the JSON reply — read it
+from there rather than minting your own (unlike Grok). Verified: a second call with `--resume`
+recalled a word from the first, at 354 input tokens against 17 536 from cache.
+
+**Prompt through a file.** Role briefs contain quotes, backticks and newlines; passing them inline
+loses to shell quoting. Write the brief to a file and interpolate `"$(cat {prompt_file})"`.
+
+**Binary path.** Installs to `~/.local/bin` (a symlink into `~/.local/share/cursor-agent/versions/`).
+If the shell cannot find `agent`, prefix the call with `PATH="$HOME/.local/bin:$PATH"`.
+
+**Model choice.** `agent --list-models` lists what the subscription allows. Do NOT route roles to
+Claude models through Cursor — you already have that subscription, and the point of offloading is a
+*different* blind spot, not the same model twice. Useful picks: `cursor-grok-4.6-xhigh` for
+adversarial reading (security review, "what if"), `gpt-5.3-codex-xhigh` where the role must write
+and run a script (risk-tester, verifiers), `gpt-5.6-sol-xhigh` for long diffs, `gemini-3.7-flash-high`
+for cheap wide tree-walking (codebase-researcher).
 
 ---
 

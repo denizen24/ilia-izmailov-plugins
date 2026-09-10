@@ -293,7 +293,7 @@ Copy `agent-teams.example.json` to `~/.claude/agent-teams.json` and change only 
 }
 ```
 
-Supported engines: `claude` (default), `codex`, `kimi`, `grok`.
+Supported engines: `claude` (default), `codex`, `kimi`, `grok`, `cursor`.
 
 How each kind of role is moved:
 
