@@ -69,6 +69,21 @@ Rules that override everything else in this skill:
   NOT-RUN is worth more than a confident guess — the user will lean on this report during an outage.
 - If the user asks "всё готово?", answer with counts: "проверено N из M, не проверено: <список>".
 
+## Engines (optional)
+
+`infra-scout` and `rollback-critic` can run on another model through an external CLI (Codex, Kimi,
+Grok, Cursor) when `~/.claude/agent-teams.json` assigns them — the same file the `agent-teams` plugin
+reads. **No file → skip this section**: every role is Claude and nothing below changes.
+
+- **Before Phase A:** resolve the engine table — `references/engines.md`, "Resolve Engines".
+- **At the spawn of `infra-scout` or `rollback-critic`:** check the table. An external engine means no
+  `Task()` — run the delegated one-shot from `references/engines.md` with the same prompt text shown
+  below.
+- `live-drift-checker` always runs on Claude: its route to production is never handed to another
+  vendor's agent.
+- An external report is held to the same evidence rules as any other: a citation that does not exist
+  is dropped, and a critic's objection with a real citation stays an open risk.
+
 ## Protocol
 
 ### Step 0 — bootstrap or audit?
@@ -97,6 +112,8 @@ Task(subagent_type="zero-downtime-deploy:infra-scout", prompt="Project at [cwd].
 happens according to the repository: what starts the app, what sits in front of it, how many
 instances, workers and cron, migrations, where secrets come from, what a rollback would look like.")
 ```
+
+`infra-scout` on an external engine → the same prompt through `references/engines.md`, no `Task()`.
 
 **Add the live scout only when there is somewhere for it to go** — an ssh alias, an authenticated
 platform CLI, a read-only API. Check first; spawning an agent to report "no access" is waste. When
@@ -209,6 +226,9 @@ Here is the evidence collected: [tags and statuses]. Prove that users will still
 release, and that the rollback will not work when it is needed. Be adversarial.")
 ```
 
+`rollback-critic` on an external engine → the same prompt, with the scheme and every check's status
+pasted into the prompt file, through `references/engines.md`.
+
 Fold surviving objections into the report as open risks. Do not argue them away.
 
 ### Phase D — report
@@ -224,7 +244,7 @@ The report is for a product person. Structure:
    list makes the report dishonest.
 6. Secrets needed and where to create them — never the values, never in chat.
 7. The routine deploy, and the exact rollback procedure as a copy-pasteable command.
-8. Open risks the critic raised.
+8. Open risks the critic raised — and which engine and model the critic ran on, if not Claude.
 
 ## Production mutation gate
 
@@ -266,6 +286,7 @@ Load only what the current step needs.
 | Workers, cron, queues, sessions, caches, front/back order, long interruptible work | `references/workers-and-state.md` |
 | Phase C and the final report | `references/verification.md` |
 | Once the platform is established | `references/platform-playbooks.md` |
+| Before Phase A, when `~/.claude/agent-teams.json` exists | `references/engines.md` |
 
 <!-- report-format-contract -->
 ### Output format: the "now → after" table

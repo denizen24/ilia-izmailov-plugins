@@ -110,6 +110,37 @@ The Lead synthesizes all findings into a structured report with:
 | **Critic** | On-demand | Sonnet | Failure mode analysis when Challenger flags gaps |
 | **Specialist** | On-demand | Sonnet | Domain-specific deep dives (security, database, external-api) |
 
+## Engines — Optional External CLI Agents
+
+**Every role runs on Claude by default. With no config file, nothing here applies.**
+
+If you have other coding CLIs installed (Codex, Kimi, Grok, Cursor), you can move the one-shot roles —
+`scout`, `research-challenger`, `critic`, `specialist` — to another model. The point is not the other
+subscription but the other model's blind spots: a challenger on a different model disagrees with the
+investigators in different places, which is what Phase 3 is for.
+
+The config is the same `~/.claude/agent-teams.json` the `agent-teams` plugin reads; each plugin takes
+only its own role IDs:
+
+```json
+{
+  "roles": {
+    "research-challenger": { "engine": "cursor", "model": "cursor-grok-4.6-xhigh" },
+    "critic": "codex"
+  }
+}
+```
+
+- `lead` and `investigator` always run on Claude — investigators claim tasks and talk to each other,
+  and that protocol does not cross a CLI boundary.
+- External roles run read-only; the Lead writes the same prompt to a file, runs the CLI, and reads the
+  report.
+- Every `file:line` an external engine cites is checked before its claim is used; claims without a
+  citation count as Hypothesized.
+- A missing CLI or a failed run falls back to Claude and says so (`"fallback": "fail"` stops instead).
+
+Details and presets: `skills/team-research/references/engines.md`.
+
 ## Team Size
 
 ```

@@ -46,6 +46,26 @@ and every claim about production names its source inline (live system, with the 
 repository file). A rollback that was never executed is reported as such, and the switch itself is
 measured: «во время переключения 1500 запросов, ошибок 0». The report is what you will lean on at 3am.
 
+## Another model as the critic (optional)
+
+The one who built the scheme is the worst judge of it — and a critic on the same model shares its
+assumptions. If you have another coding CLI installed (Codex, Kimi, Grok, Cursor), you can run the
+repository scout and the rollback critic on a different model through the same
+`~/.claude/agent-teams.json` the `agent-teams` plugin reads:
+
+```json
+{
+  "roles": {
+    "rollback-critic": { "engine": "cursor", "model": "cursor-grok-4.6-xhigh" }
+  }
+}
+```
+
+With no config file nothing changes. `live-drift-checker` always stays on Claude — its route to
+production is never handed to another vendor's agent. External roles run read-only, their citations
+are checked, and a critic's objection with a real citation still lands in open risks. Details:
+`skills/zero-downtime-deploy/references/engines.md`.
+
 ## Structure
 
 ```
@@ -58,6 +78,7 @@ skills/zero-downtime-deploy/
     workers-and-state.md        queues, cron, long interruptible work, sessions, caches, bundles
     verification.md             what counts as verified, smoke tests, measuring the switch, drill
     platform-playbooks.md       Docker Swarm, VM+nginx, Compose, managed platforms, GH Actions
+    engines.md                  optional: scout and critic on another model via an external CLI
 agents/
   infra-scout.md                repository side, read-only, every finding cites a file
   live-drift-checker.md         live system, strictly read-only — spawned only if there's a route
