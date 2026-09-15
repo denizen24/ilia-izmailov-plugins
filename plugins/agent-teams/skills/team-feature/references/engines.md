@@ -172,6 +172,8 @@ Run this before Phase 1 Step 1. It is cheap and must not be skipped when the con
    Any missing name → those roles fall back per `fallback`.
 4. **Build the engine table** — role ID → engine — and keep it for the whole run. Write it into
    `.claude/teams/{team-name}/state.md` under `## Engines` so it survives compaction.
+   Role IDs that are not in the Role Registry belong to other plugins sharing this file
+   (`team-research`, `zero-downtime-deploy`) — leave them out of the table and the 📢 line.
 5. 📢 **Print one line** only if at least one role is non-claude:
    `⚙️ Движки: {role} → {engine}, {role} → {engine} (остальные — Claude)`
    And if anything fell back: `⚙️ {engine} не найден — {role} работает на Claude.`

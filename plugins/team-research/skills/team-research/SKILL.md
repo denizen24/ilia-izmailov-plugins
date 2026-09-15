@@ -67,6 +67,19 @@ complexity = 1 (simple), 2 (medium), 3 (complex)
 
 Specialists and Critic are spawned ONLY on explicit signal. Do not pre-spawn.
 
+## Engines (optional)
+
+A role can run on another model through an external CLI (Codex, Kimi, Grok, Cursor) when
+`~/.claude/agent-teams.json` assigns it — the same file the `agent-teams` plugin reads. **No file →
+skip this section**: every role is Claude and nothing below changes.
+
+- **Before Phase 1:** resolve the engine table — `references/engines.md`, "Resolve Engines".
+- **At every spawn of `scout`, `research-challenger`, `critic` or `specialist`:** check the table. An
+  external engine means no `Task()` — run the delegated one-shot from `references/engines.md` with the
+  same prompt text shown below, and read its report as that agent's message to you.
+- `lead` and `investigator` always run on Claude.
+- Whatever an external engine reports is unverified until you open its `file:line` citations.
+
 ## Protocol
 
 ### Phase 1: Plan (5-10 min)
@@ -83,6 +96,7 @@ Specialists and Critic are spawned ONLY on explicit signal. Do not pre-spawn.
    Quick-scan the landscape and send findings to lead."
    )
    ```
+   `scout` on an external engine → the same prompt through `references/engines.md`, no `Task()`.
 
 2. **Based on Scout's report, define:**
    - **Angles** (3-7): independent, non-overlapping (MECE)
@@ -165,6 +179,10 @@ CROSS-POLLINATION INSIGHTS (if any):
 Stress-test these findings and send your assessment to lead."
 )
 ```
+
+`research-challenger` on an external engine → the same prompt, with every investigator's findings
+pasted into the prompt file, through `references/engines.md`. Its report arrives from the output file
+instead of a message; everything after this point is unchanged.
 
 **After Challenger reports:**
 
@@ -253,6 +271,7 @@ After Challenge passes (or after re-investigation round):
 
 **Date:** [timestamp]
 **Team:** [count] investigators + [count] challenger/critic/specialists
+**Engines:** [role → engine/model for every non-Claude role, or "all Claude"]
 **Angles covered:** [list]
 **Feynman Test pass rate:** [X of Y findings pass explain/example/predict]
 
