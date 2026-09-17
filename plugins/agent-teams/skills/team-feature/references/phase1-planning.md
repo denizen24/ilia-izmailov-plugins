@@ -206,11 +206,9 @@ This means: 3 architects debate the plan first, up to 5 coders, risks get verifi
 
 (For SIMPLE: "⚖️ Complexity: SIMPLE — one coder + one reviewer, no risk analysis. Fast lane.")
 
-Now plan:
-
-```
-TeamCreate(team_name="feature-<short-name>")
-```
+Now plan. Pick the team name `feature-<short-name>` — it names the run directory
+`.claude/teams/{team-name}/`. There is no `TeamCreate`: the team is implicit and exists as soon as the
+first teammate is spawned (`team-runtime.md` §1).
 
 ### VERIFICATION_PLAN.md Template
 
@@ -292,34 +290,36 @@ Keep this block to 3-5 examples, ~100-150 lines total. Prioritize by relevance t
 
 ### Task Creation Template
 
-Create tasks with gold standard context from researcher findings:
+Write every task into `.claude/teams/{team-name}/tasks.md` — the single task list (`team-runtime.md`
+§2). Do not use `TaskCreate`: current Claude Code offers it only to some models. One section per
+task, with gold standard context from researcher findings:
 
 ```
-TaskCreate(
-  subject="Add settings API endpoint",
-  description="Create GET/PUT /api/settings endpoint.
+## #1 Add settings API endpoint
+Blocked by: —
 
-  Files to create/edit: src/server/routers/settings.ts
-  Reference files (read for patterns): src/server/routers/profile.ts, src/server/routers/account.ts
+Create GET/PUT /api/settings endpoint.
 
-  Acceptance criteria:
-  - GET returns current user settings
-  - PUT updates settings with validation
-  - Follow the same tRPC router pattern as profile.ts
+Files to create/edit: src/server/routers/settings.ts
+Reference files (read for patterns): src/server/routers/profile.ts, src/server/routers/account.ts
 
-  Convention checks (MUST PASS before requesting review):
-  - Router file named: [resource].ts (lowercase, singular)
-  - Procedure names: get[Resource], update[Resource] (camelCase)
-  - Zod schemas colocated in same file
-  - Error handling matches profile.ts pattern
+Acceptance criteria:
+- GET returns current user settings
+- PUT updates settings with validation
+- Follow the same tRPC router pattern as profile.ts
 
-  Tooling:
-  - Test: pnpm vitest
-  - Lint: pnpm biome check
-  - Type check: pnpm tsc --noEmit
+Convention checks (MUST PASS before requesting review):
+- Router file named: [resource].ts (lowercase, singular)
+- Procedure names: get[Resource], update[Resource] (camelCase)
+- Zod schemas colocated in same file
+- Error handling matches profile.ts pattern
 
-  Feature DoD applies — see VERIFICATION_PLAN.md"
-)
+Tooling:
+- Test: pnpm vitest
+- Lint: pnpm biome check
+- Type check: pnpm tsc --noEmit
+
+Feature DoD applies — see VERIFICATION_PLAN.md
 ```
 
 **Every task description MUST include:**
@@ -332,20 +332,20 @@ TaskCreate(
 **Always create a conventions task as the LAST task** (blocked by all other coding tasks):
 
 ```
-TaskCreate(
-  subject="Update .conventions/ with discovered patterns",
-  description="Run the /conventions command logic to create or update .conventions/.
+## #{last} Update .conventions/ with discovered patterns
+Blocked by: #1, #2, ... (every coding task)
 
-  Additional context from THIS session (use alongside codebase analysis):
-  1. Issues reviewers flagged 2+ times (recurring = missing convention)
-  2. New patterns this feature introduced
-  3. Approved escalations (Tech Lead approved deviations from existing patterns)
+Run the /conventions command logic to create or update .conventions/.
 
-  This is NOT optional. Every /team-feature run must leave .conventions/ up to date."
-)
+Additional context from THIS session (use alongside codebase analysis):
+1. Issues reviewers flagged 2+ times (recurring = missing convention)
+2. New patterns this feature introduced
+3. Approved escalations (Tech Lead approved deviations from existing patterns)
+
+This is NOT optional. Every /team-feature run must leave .conventions/ up to date.
 ```
 
-Then set it as blocked by all other coding tasks via TaskUpdate. The conventions task is the LAST task — verification runs automatically in Phase 3 after all tasks complete.
+Every task starts UNASSIGNED; statuses go into the `## Tasks` section of state.md when you write it at Step 5. The conventions task is the LAST task — verification runs automatically in Phase 3 after all tasks complete.
 
 ## Step 4: Validate Plan
 
@@ -359,8 +359,8 @@ Spawn Tech Lead (permanent teammate, uses `agents/tech-lead.md`):
 ```
 Task(
   subagent_type="agent-teams:tech-lead",
-  team_name="feature-<short-name>",
   name="tech-lead",
+  run_in_background=true,
   prompt="Feature: '{feature description}'.
 Team name: feature-<short-name>.
 
@@ -376,7 +376,7 @@ Wait for my instructions (VALIDATE PLAN, IDENTIFY RISKS, review requests)."
 Then **validate the plan**:
 ```
 SendMessage to tech-lead:
-"VALIDATE PLAN: Please review the task list for this feature.
+"VALIDATE PLAN: Please review the task list for this feature — .claude/teams/{team-name}/tasks.md.
 Check task scoping, file assignments, dependencies, and architectural approach.
 
 Feature Definition of Done:
@@ -385,26 +385,26 @@ Feature Definition of Done:
 Reply PLAN OK or suggest changes."
 ```
 
-Wait for Tech Lead response. If they suggest changes → adjust tasks → re-validate.
+Wait for Tech Lead response. If they suggest changes → adjust tasks.md → re-validate.
 
 **For COMPLEX:** Spawn 3 Architects and run specification debate.
 
 ### Step 4c-1: Spawn architects (all 3 in parallel as team members):
 
 ```
-Task(subagent_type="agent-teams:architect", team_name="feature-<short-name>", name="architect-frontend",
+Task(subagent_type="agent-teams:architect", name="architect-frontend", run_in_background=true,
   prompt="You are the FRONTEND Architect for team feature-<short-name>.
 PERSONA: FRONTEND
 EXPERTISE: Component architecture, state management, UI patterns, client-side performance, accessibility, design system usage.
 Wait for DEBATE PLAN from Lead.")
 
-Task(subagent_type="agent-teams:architect", team_name="feature-<short-name>", name="architect-backend",
+Task(subagent_type="agent-teams:architect", name="architect-backend", run_in_background=true,
   prompt="You are the BACKEND Architect for team feature-<short-name>.
 PERSONA: BACKEND
 EXPERTISE: API design, DB schema, data integrity, server-side performance, scalability, migration strategy.
 Wait for DEBATE PLAN from Lead.")
 
-Task(subagent_type="agent-teams:architect", team_name="feature-<short-name>", name="architect-systems",
+Task(subagent_type="agent-teams:architect", name="architect-systems", run_in_background=true,
   prompt="You are the SYSTEMS Architect for team feature-<short-name>.
 PERSONA: SYSTEMS
 EXPERTISE: Testing strategy, CI/CD impact, convention compliance, developer experience, deployment, monitoring.
@@ -416,6 +416,7 @@ Wait for DEBATE PLAN from Lead.")
 ```
 SendMessage to architect-frontend, architect-backend, architect-systems:
 "DEBATE PLAN: Review the task list for this feature from your expertise perspective.
+Task list: .claude/teams/{team-name}/tasks.md
 
 Feature: {feature description}
 Feature Definition of Done: {DoD from Step 3}
@@ -431,8 +432,13 @@ YOUR TEAM:
 - architect-backend (API/DB/security)
 - architect-systems (testing/CI/DX)
 
-Debate protocol, round summaries to Lead, domain verification checks, and convergence (SPEC APPROVED) — follow your agent file."
+Debate protocol, round summaries to Lead, domain verification checks, and convergence (SPEC APPROVED) — follow your agent file.
+You address the other architects with a TO: header; Lead relays (team-runtime.md §3)."
 ```
+
+**Relay the debate.** Architects' critiques arrive as `TO: architect-...` messages — forward each
+verbatim per `team-runtime.md` §3. You do not moderate or summarise the arguments; you only carry
+them. The ROUND SUMMARY lines (no `TO:`) are for you and feed the 📢 digest below.
 
 ### Step 4c-3: Monitor debate and handle convergence:
 
@@ -455,7 +461,7 @@ Don't wait for all 3 summaries of a round to print — post what you have when 2
 
 Wait for all 3 architects to send "SPEC APPROVED" to Lead. If they converge:
 - Collect all recommendations
-- Apply agreed changes to task descriptions (TaskUpdate)
+- Apply agreed changes to task descriptions in tasks.md
 - Designate the **most relevant architect as Primary** based on feature type:
   - Feature is mostly UI → architect-frontend is Primary
   - Feature is mostly API/DB → architect-backend is Primary
@@ -569,7 +575,7 @@ AskUserQuestion(
 - **Always show 2-3 options, never 1.** If there's only one viable option, don't ask — just do it.
 - **Explain trade-offs, not implementation details.** The user is deciding WHAT, not HOW. "Faster but harder to change later" > "Uses Redis pub/sub with TTL-based expiration."
 - **Include a "Your call" option** if the decision is purely technical and the user might not care.
-- **After user picks:** Update the relevant task descriptions with the chosen approach (TaskUpdate). Add the decision to DECISIONS.md if it exists.
+- **After user picks:** Update the relevant task descriptions in tasks.md with the chosen approach. Add the decision to DECISIONS.md if it exists.
 - **Wireframes should be rough and fast** — box-drawing characters, simple text layout. Not art. Enough to see the structure.
 
 ## Step 4b: Risk Analysis (MEDIUM and COMPLEX only)
@@ -633,8 +639,8 @@ After plan validation (Tech Lead for MEDIUM, Architect debate for COMPLEX), run 
    ```
 
 4. **Lead applies recommendations:**
-   - If new tasks suggested → create them (TaskCreate)
-   - If reordering suggested → adjust dependencies (TaskUpdate)
+   - If new tasks suggested → add them to tasks.md
+   - If reordering suggested → adjust the `Blocked by:` lines in tasks.md
    - If a risk requires user decision (e.g., "accept data loss during migration or add backward compatibility?") → notify user
    - 📢 Close the risk step with one line on what changed: `📝 Plan adjusted: +1 task (request queue), confirmed risks added to the verification checklist.` (If nothing changed: `📝 Plan unchanged — no confirmed risks required it.`)
    - **Update VERIFICATION_PLAN.md** — add confirmed risk mitigations to the "Risk Mitigation Checks" section:
@@ -648,7 +654,7 @@ After plan validation (Tech Lead for MEDIUM, Architect debate for COMPLEX), run 
 
 Spawn everyone NOW — reviewers (or switch architects to review mode), and coders.
 
-**Engine check before every spawn in this step.** For any teammate role assigned to an external engine, swap `subagent_type` to `agent-teams:proxy-teammate`, keep `name` and `team_name` identical, and prepend to the prompt below:
+**Engine check before every spawn in this step.** For any teammate role assigned to an external engine, swap `subagent_type` to `agent-teams:proxy-teammate`, keep `name` identical, and prepend to the prompt below:
 
 ```
 ROLE: {role id}
@@ -666,7 +672,7 @@ Then the normal prompt text follows unchanged. The roster other teammates see is
 
 **For SIMPLE** — spawn unified reviewer:
 ```
-Task(subagent_type="agent-teams:unified-reviewer", team_name="feature-<short-name>", name="unified-reviewer",
+Task(subagent_type="agent-teams:unified-reviewer", name="unified-reviewer", run_in_background=true,
   prompt="You are the unified reviewer for team feature-<short-name>.
 
 FEATURE CONTEXT:
@@ -674,14 +680,14 @@ Feature: {feature description — what we're building and why}
 Definition of Done: {DoD from Step 3}
 Gold standard references: {list reference files from researcher findings or .conventions/}
 
-Wait for REVIEW requests from coders via SendMessage.
+REVIEW requests from coders reach you relayed by Lead, starting with FROM: <coder>. Reply with TO: <coder> (team-runtime.md §3).
 When reviewing, verify code matches the gold standard patterns and meets the Definition of Done.
 If code touches auth/payments/migrations, send ESCALATE TO MEDIUM to Lead.")
 ```
 
 **For MEDIUM** — spawn all 3 reviewers in parallel from one template, {role} = security-reviewer / logic-reviewer / quality-reviewer:
 ```
-Task(subagent_type="agent-teams:{role}", team_name="feature-<short-name>", name="{role}",
+Task(subagent_type="agent-teams:{role}", name="{role}", run_in_background=true,
   prompt="You are the {security | logic | quality} reviewer for team feature-<short-name>.
 
 FEATURE CONTEXT:
@@ -690,7 +696,7 @@ Definition of Done: {DoD from Step 3}
 Gold standard references: {list reference files from researcher findings or .conventions/}
 Confirmed risks from risk analysis: {CONFIRMED risks from Step 4b relevant to this reviewer's domain}
 
-Wait for REVIEW requests from coders via SendMessage.
+REVIEW requests from coders reach you relayed by Lead, starting with FROM: <coder>. Reply with TO: <coder> (team-runtime.md §3).
 Pay special attention to the confirmed risks above — verify that code properly addresses their mitigations.")
 ```
 
@@ -775,31 +781,31 @@ your commit by building the file's content from its committed version plus your 
 their edits stay out of your commit. Report it in your DONE digest.
 ```
 
-Tell each coder their team roster so they can communicate directly. One prompt template for all complexities — only the YOUR TEAM ROSTER block varies:
+Tell each coder their team roster — the exact names it puts in `TO:` headers. One prompt template for all complexities — only the YOUR TEAM ROSTER block varies:
 
 ```
 Task(
   subagent_type="agent-teams:coder",
-  team_name="feature-<short-name>",
   name="coder-<N>",
+  run_in_background=true,
   prompt="You are Coder #{N}. Team: feature-<short-name>.
 
 FEATURE GOAL: {1-2 sentences — what we're building and why, so you understand the big picture}
 DEFINITION OF DONE: {DoD from Step 3}
 
-YOUR TEAM ROSTER (communicate directly via SendMessage):
+YOUR TEAM ROSTER (address them with a TO: header — Lead relays, see your agent file):
 {roster block by complexity — see below}
 
 IMPORTANT: If DECISIONS.md exists at .claude/teams/{team-name}/DECISIONS.md — read it before starting. It contains architectural decisions, confirmed risks, and their mitigations that affect your implementation.
 
-YOUR TASK CONTEXT:
-{Brief summary of what this coder will work on — from task descriptions}
+YOUR TASK: #{id} — read its section in .claude/teams/{team-name}/tasks.md
+{Brief summary of what this coder will work on — from the task description}
 
 --- GOLD STANDARD EXAMPLES ---
 {GOLD STANDARD BLOCK compiled by Lead in Step 3}
 --- END GOLD STANDARDS ---
 
-Claim your first task from the task list and start working."
+Start working on task #{id}."
 )
 ```
 
@@ -808,13 +814,13 @@ Claim your first task from the task list and start working."
 - **SIMPLE:**
   ```
   - Reviewers: unified-reviewer
-  - Lead: for DONE/STUCK signals only
+  - Lead: DONE/STUCK signals; also carries every TO: message you send
   ```
 - **MEDIUM:**
   ```
   - Reviewers: security-reviewer, logic-reviewer, quality-reviewer
   - Tech Lead: tech-lead
-  - Lead: for DONE/STUCK signals only
+  - Lead: DONE/STUCK signals; also carries every TO: message you send
   ```
 - **COMPLEX:**
   ```
@@ -822,7 +828,7 @@ Claim your first task from the task list and start working."
     (the architects handed over review briefs and stood down — do NOT message them)
   - Primary Architect: {primary architect name} — escalations and architectural decisions ONLY,
     not per-task code review. Do not send REVIEW requests there.
-  - Lead: for DONE/STUCK signals only
+  - Lead: DONE/STUCK signals; also carries every TO: message you send
   ```
   For COMPLEX, also make the DECISIONS.md line unconditional: "Read DECISIONS.md at .claude/teams/{team-name}/DECISIONS.md before starting — it contains the architect debate summary, confirmed risks, and mitigations that affect your implementation."
 
@@ -858,8 +864,8 @@ If you lost context after compaction, read this file.
 ## Team Name: feature-{short-name}
 
 ## Phase 2 Instructions (EXECUTION)
-Your role: listen for DONE/STUCK/ESCALATE from team members.
-- DO NOT read code, run checks, or notify reviewers — coders do that directly
+Your role: relay every TO: message verbatim (references/team-runtime.md §3), listen for DONE/STUCK/ESCALATE.
+- DO NOT read code, run checks, pick reviewers, or edit relayed messages — coders drive their own review loop
 - Update this file after each event
 - Print a progress feed line to chat for each event — task digests, decisions, stuck reports (see phase2-monitoring.md event table). The user is watching the run live.
 - When ALL coding tasks show COMPLETED → change Phase to VERIFICATION and follow Phase 3 instructions below
@@ -871,7 +877,7 @@ When you change Phase to VERIFICATION, execute IN ORDER (full details: reference
 3. Prepare verification plan — read VERIFICATION_PLAN.md, update with actual paths/endpoints
 4. Integrated verification — spawn ci-verifier + browser-verifier + spec-verifier in parallel, fix-verify loop for FAIL items (max 3 iterations), save VERIFICATION_REPORT.md
 5. Legacy cleanup — read LEGACY_REPORT.md + Explore scan, AskUserQuestion Delete/Keep/Later per item, cleanup tasks or .legacy-todo.md
-6. Summary & shutdown — final report, shutdown_request to all teammates, TeamDelete, present Human Checks via AskUserQuestion
+6. Summary & shutdown — final report, stop any teammate still running (no team to delete), present Human Checks via AskUserQuestion
 
 ## Engines
 {Omit this whole section if no config file exists — the default is Claude everywhere.}
@@ -895,6 +901,7 @@ When you change Phase to VERIFICATION, execute IN ORDER (full details: reference
   (rotate one reviewer every 3 completed tasks — see phase2-monitoring.md "Rotating Reviewers")
 
 ## Tasks
+(descriptions: tasks.md — this list holds status only, written by you)
 - #{id}: {subject} — {STATUS} ({assignment})
 
 ## Active Coders: {N} (max: {M})
@@ -908,4 +915,4 @@ After spawning everyone and writing state.md, print one line — composition in 
 👥 Team assembled: 3 architects (now acting as reviewers), 4 coders. Writing code — you'll see a line here for every completed task, decision, and problem.
 ```
 
-Coders drive their own review process via SendMessage to reviewers and tech-lead. Lead is NOT in the review loop.
+Coders drive their own review process; their `TO:` messages pass through you and you forward them verbatim. You carry the review loop, you do not take part in it.

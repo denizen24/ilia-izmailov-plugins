@@ -73,7 +73,7 @@ Every claim is tagged with its source:
 - **Inferred** — logical conclusion from observations
 - **Hypothesized** — best guess, needs verification
 
-Investigators can communicate with each other for cross-pollination.
+Investigators do not message each other: cross-angle findings go into their reports and the Lead forwards them (current Claude Code silently drops a message to a teammate whose turn has finished).
 
 ### Phase 2.5: Cross-Pollinate
 
@@ -132,8 +132,8 @@ at another plugin's `critic` by accident:
 }
 ```
 
-- `lead` and `investigator` always run on Claude — investigators claim tasks and talk to each other,
-  and that protocol does not cross a CLI boundary.
+- `lead` and `investigator` always run on Claude — Lead messages investigators mid-run (hints,
+  redirects, forwarded cross-angle findings), and that exchange does not cross a CLI boundary.
 - External roles run read-only; the Lead writes the same prompt to a file, runs the CLI, and reads the
   report.
 - Every `file:line` an external engine cites is checked before its claim is used; claims without a

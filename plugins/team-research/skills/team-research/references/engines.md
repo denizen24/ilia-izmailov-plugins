@@ -26,7 +26,7 @@ to find.
 |---------|-----------|----------------|-----|
 | `lead` | skill entry | **claude only** | owns the team, the synthesis and the dialogue with the user |
 | `research-scout` | Phase 1 | claude, codex, kimi, grok, cursor | one-shot, read-only landscape scan (`agents/scout.md`) |
-| `investigator` | Phase 2 | **claude only** | claims tasks and talks to other investigators — team protocol does not cross a CLI boundary |
+| `investigator` | Phase 2 | **claude only** | long multi-turn investigation that Lead messages mid-run (hints, redirects, forwarded cross-angle findings) — that exchange does not cross a CLI boundary |
 | `research-challenger` | Phase 3 | claude, codex, kimi, grok, cursor | adversarial reading of the pasted findings — the best fit for a different model |
 | `research-critic` | Phase 3, on demand | claude, codex, kimi, grok, cursor | failure-mode analysis of the flagged areas (`agents/critic.md`) |
 | `research-specialist` | Phase 3, on demand | claude, codex, kimi, grok, cursor | deep dive into one flagged area (`agents/specialist.md`) |
@@ -82,7 +82,7 @@ At the spawn point of an external role, **do not call `Task()`**. Instead:
 
 1. **Write the prompt to a file first** — with Bash (`cat > … <<'EOF'`), since this skill has no Write
    tool. **`mkdir -p` the directory in the same Bash call** — the heredoc does not create it, and the
-   scout runs before `TeamCreate`, so nothing has made the team directory yet.
+   scout runs before anything has been written into the run directory, so it may not exist yet.
    Path: `.claude/teams/research-<topic-slug>/engine/<role>-<n>.prompt.md`. Content, in order:
    - the orchestrator line from "Role Brief" below;
    - the role brief — the body of `agents/<role>.md`, prepared as described below;

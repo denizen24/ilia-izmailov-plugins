@@ -8,11 +8,11 @@ When all coding tasks are completed:
 
 📢 One line entering Phase 3: `🏁 Code is written. Wrapping up: updating project conventions, then running all checks.`
 
-The conventions task (created in Phase 1 Step 3) should now be unblocked. Assign it to a coder.
+The conventions task (the last section of tasks.md) should now be unblocked. Spawn a fresh coder for it — coders stand down after one task.
 
 The coder receives the task description which tells them exactly what to create/update (signal sources are listed there). If `.conventions/` didn't exist before, bootstrap it with the key patterns researchers identified.
 
-The conventions task is tracked in the task list like any other task. It goes through the same review flow (coder implements → reviewers check → Tech Lead approves → commit).
+The conventions task is tracked in tasks.md and state.md like any other task. It goes through the same review flow (coder implements → reviewers check → Tech Lead approves → commit).
 
 After the conventions task is done, report what was created/updated in the summary.
 
@@ -57,7 +57,7 @@ Lead verifies before declaring done:
 Glob(".conventions/**/*")
 ```
 - If .conventions/ does not exist or was not modified during this session → **STOP. Feature is NOT complete.**
-- Go back to step 1 and run the conventions task. If it was never created → create it now and assign to a coder.
+- Go back to step 1 and run the conventions task. If it was never created → add it to tasks.md now and spawn a coder for it.
 
 ## 4. Prepare VERIFICATION_PLAN.md
 
@@ -151,7 +151,7 @@ Report per check with evidence.")
 (If everything passed: `🧪 All {N} checks passed ✅.`)
 
 If there are **FAIL** items:
-1. Create targeted fix tasks for coders based on failure evidence
+1. Add targeted fix tasks to tasks.md based on failure evidence and spawn coders for them
 2. Wait for coders to fix and commit
 3. Re-run ONLY the failed checks (spawn fresh verifiers for failed items only)
 4. **Hard cap: 3 iterations max.** Tag each iteration: "Verification run {N}/3: fixing {list}"
@@ -289,17 +289,17 @@ For each item based on the user's choice:
 
 **"Delete" items** → create a single cleanup task bundling all delete items:
 ```
-TaskCreate(
-  subject="Cleanup legacy after feature completion",
-  description="Remove the following legacy items approved by user:
+## #{next} Cleanup legacy after feature completion
+Blocked by: —
+
+Remove the following legacy items approved by user:
 
 {list of items to delete with file:line and description}
 
-Do NOT remove anything not on this list. Run self-checks + request review as usual. Commit with: 'chore: cleanup legacy after {feature-name}'"
-)
+Do NOT remove anything not on this list. Run self-checks + request review as usual. Commit with: 'chore: cleanup legacy after {feature-name}'
 ```
 
-Assign to a coder (spawn a fresh coder if all current ones are shut down, or reuse an active one). Wait for DONE. Reviewers must approve.
+Append it to tasks.md and spawn a fresh coder for it. Wait for DONE. Reviewers must approve.
 
 **"Later" items** → append to `.legacy-todo.md` at repo root (create the file if missing):
 ```
@@ -356,11 +356,13 @@ Runtime verification: {N/A if no human checks | PENDING — see Human Checks bel
 
 ## 8. Shutdown Team
 
-- SendMessage(type="shutdown_request") to all permanent teammates:
-  - MEDIUM: Tech Lead + security-reviewer + logic-reviewer + quality-reviewer
-  - COMPLEX: architect-frontend + architect-backend + architect-systems
-  - SIMPLE: unified-reviewer
-- TeamDelete
+There is no team to delete (`team-runtime.md` §4).
+
+- Permanent teammates — MEDIUM: Tech Lead + security-reviewer + logic-reviewer + quality-reviewer;
+  COMPLEX: the three reviewers (architects already stood down); SIMPLE: unified-reviewer.
+- Those whose turn has finished need nothing. Any still running: `SendMessage` with
+  `{"type": "shutdown_request"}` or `TaskStop`, and confirm it stopped.
+- Mark every roster entry `STOOD_DOWN` in state.md.
 
 ## 9. Present Human Checks to User
 

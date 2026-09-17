@@ -4,7 +4,9 @@ Launch a team of AI agents to implement features with built-in code review gates
 
 ## Prerequisites
 
-> **Agent teams are experimental and disabled by default.** You need to enable them before using this plugin.
+> **Agent teams are experimental and disabled by default.** Enabling them is recommended. The pipeline itself
+> does not depend on the flag: teammates are named background agents and Lead relays their messages, so
+> it also runs with teams off.
 
 Add `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` to your `settings.json` or environment:
 
@@ -24,6 +26,20 @@ export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
 ```
 
 Restart Claude Code after enabling.
+
+### How the team talks (Claude Code 2.1.178+)
+
+Current Claude Code has no `TeamCreate` / `TeamDelete` — every session has one implicit team — and
+offers `TaskCreate` / `TaskList` only to some models (not to Opus 5 by default). A message from one
+teammate to another whose turn has already finished is reported as sent and never delivered. So the
+plugin:
+
+- keeps the plan in `.claude/teams/<team>/tasks.md`, owned by Lead;
+- routes every teammate-to-teammate message through Lead: the sender writes `TO: <names>` on the
+  first line, Lead forwards it verbatim and never reads the code it points to;
+- ends a run by stopping whatever is still running — there is no team to delete.
+
+Details and the delivery measurements: `skills/team-feature/references/team-runtime.md`.
 
 ## Installation
 
@@ -131,7 +147,7 @@ Risk Testers are spawned in parallel — one per CRITICAL/MAJOR risk. Confirmed 
 For complex features, 3 specialized Architects settle the specification before any code is written:
 
 1. **Spawn 3 Architects** — Frontend (UI/components/accessibility), Backend (API/DB/data integrity), Systems (testing/CI/DX)
-2. **Debate phase** — each architect critiques the plan from their expertise, debates with others via direct messaging (max 3 rounds)
+2. **Debate phase** — each architect critiques the plan from their expertise, debates with others through Lead relay (max 3 rounds)
 3. **Verification checks** — each architect contributes checks from their domain to the verification plan
 4. **Convergence** — architects send "SPEC APPROVED" with final recommendations
 5. **Handover** — each architect writes a ≤25-line review brief for its domain: what a reviewer must
@@ -156,7 +172,7 @@ Coders receive their task along with gold standard examples — real files from 
 1. Reads gold standards and reference files
 2. Implements matching the same patterns
 3. Runs self-checks (build, lint, type check, convention checks)
-4. Sends review requests directly to reviewers via messaging
+4. Sends one review request addressed to every reviewer; Lead relays it
 5. Fixes feedback, gets approval, commits
 6. Writes a ≤10-line handover note and **stands down** — the next task gets a fresh coder
 
@@ -171,7 +187,7 @@ the run.
 
 **Specialized Review**
 
-Coders drive the review process — they message reviewers directly. Lead is NOT in the review loop.
+Coders drive the review process. Every message between teammates travels through Lead, which forwards it verbatim and stays out of the code — see "How the team talks" below.
 
 **SIMPLE** — one Unified Reviewer covers security basics, logic, and quality in a single pass. Automatically escalates to MEDIUM if code touches sensitive areas.
 
@@ -255,12 +271,12 @@ These conventions are used by `/team-feature` as few-shot examples for coders. R
 
 | Role | Lifetime | Purpose |
 |------|----------|---------|
-| **Lead** | Whole session | Orchestrates pipeline, dispatches researchers, monitors progress |
+| **Lead** | Whole session | Orchestrates pipeline, dispatches researchers, relays messages, monitors progress |
 | **Codebase Researcher** | One-shot | Returns condensed project summary (structure, stack, patterns) |
 | **Reference Researcher** | One-shot | Returns full content of best example files for each layer |
 | **Tech Lead** | Permanent (MEDIUM) | Validates plan, architectural review, maintains DECISIONS.md |
 | **Architect** | Permanent (COMPLEX) | Debates spec, then reviews code in domain. 3 personas: Frontend, Backend, Systems |
-| **Coder** | Per task | Implements matching gold standards, self-checks, requests review directly |
+| **Coder** | Per task | Implements matching gold standards, self-checks, requests review through Lead relay |
 | **Security Reviewer** | Permanent (MEDIUM) | Injection, XSS, auth bypasses, IDOR, secrets |
 | **Logic Reviewer** | Permanent (MEDIUM) | Race conditions, edge cases, null handling, async |
 | **Quality Reviewer** | Permanent (MEDIUM) | DRY, naming, abstractions, convention compliance |
