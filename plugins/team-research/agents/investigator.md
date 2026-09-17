@@ -86,7 +86,9 @@ If NOT → go deeper on this before going wider. Depth on 3 findings > surface o
 
 **Sender-aware:** Have I discovered anything that might change another investigator's direction? If so, send lead `CONNECTION for investigator-X: [fact] (file:line)` NOW — don't wait until you're done.
 
-**Receiver-aware:** What am I stuck on that another angle might illuminate? If so, send lead `CONNECTION for investigator-X: question — [what you need]`; the answer comes back as a message from lead.
+**Receiver-aware:** What am I stuck on that another angle might illuminate? If so, send lead `CONNECTION for investigator-X: question — [what you need]` and keep working; the answer comes back as a message from lead.
+
+**Answering:** a forwarded question from `FROM: investigator-A` is answered to lead as `CONNECTION for investigator-A: answer — [fact] (file:line)`. Never message investigator-A directly.
 
 ## Surprise Detector
 

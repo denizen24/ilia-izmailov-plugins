@@ -143,7 +143,7 @@ Current Claude Code has no `TeamCreate` / `TeamDelete` (the team is implicit) an
    ```
 
 2. **While investigators work:**
-   - `CONNECTION for investigator-X: ...` from an investigator → forward it verbatim: `SendMessage(to="investigator-X", message="FROM: investigator-<sender>\n...")`. If X has already reported, add: "Answer with an addendum only if this changes a finding — not a new full report." Investigators do not message each other.
+   - `CONNECTION for investigator-X: ...` from an investigator (a fact, a question, or an answer to a question) → forward it verbatim: `SendMessage(to="investigator-X", message="FROM: investigator-<sender>\n...")`. If X has already reported, add: "Answer with an addendum only if this changes a finding — not a new full report." Investigators do not message each other.
    - `PREMISE INVALID: ...` → decide now whether to re-scope the angles; do not wait for the other reports.
    - If an investigator gets stuck → give hints about where to look
    - If angles turn out to overlap → redirect to avoid duplication
@@ -348,7 +348,7 @@ Include source tags for each recommendation's evidence base.]
 ## Key Rules
 
 - **Depth > Coverage** — 3 well-explained findings beat 10 surface observations
-- **Investigators do not talk to each other** — they write cross-angle notes into their reports, and you carry them
+- **Investigators do not talk to each other** — they send you `CONNECTION for investigator-X` notes mid-run, and you forward each one as it arrives, without waiting for reports
 - **You are the synthesizer and cross-pollinator** — find connections investigators can't see alone
 - **Preserve Source Tags** — Observed/Inferred/Hypothesized must appear in the final report
 - **Preserve file:line references** — these are the evidence, don't lose them

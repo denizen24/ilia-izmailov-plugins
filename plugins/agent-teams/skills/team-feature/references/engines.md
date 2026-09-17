@@ -305,9 +305,10 @@ The proxy's contract is defined in `agents/proxy-teammate.md`. Two rules matter 
 
 ### When the proxy cannot start
 
-If the proxy reports `ENGINE_DOWN: <role>. <reason>` to Lead and shuts down, Lead applies
-`fallback`: spawns the normal Claude teammate under the same name, sends a `ROSTER UPDATE` to
-affected coders, and prints `⚙️ {engine} недоступен — {role} работает на Claude.`
+If the proxy reports `ENGINE_DOWN: <role>. <reason>` to Lead, Lead applies `fallback` exactly as the
+`ENGINE_DOWN` row in `phase2-monitoring.md` says: `TaskStop` the proxy if still running, spawn the
+normal Claude teammate under the same name, re-forward that name's open requests from `relay.log`
+with `RESEND:`. Coders are not asked to re-send. Print `⚙️ {engine} недоступен — {role} работает на Claude.`
 
 ---
 
