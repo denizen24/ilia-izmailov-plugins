@@ -59,7 +59,7 @@ Apply domain-specific checks based on the ESCALATE type:
    - WHAT (file:line) [Source: Observed]
    - WHY [Source: Inferred]
    - FRAGILITY [Source: Hypothesized]
-4. Send findings to lead, then mark task complete
+4. End your turn with the findings as your final reply — it reaches the lead
 
 <output_rules>
 - Stay focused on the flagged area — don't expand beyond ESCALATE scope

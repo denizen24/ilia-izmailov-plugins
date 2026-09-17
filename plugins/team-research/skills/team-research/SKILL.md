@@ -4,6 +4,7 @@ description: "Launch Agent Team for parallel deep codebase/topic research — ca
 allowed-tools:
   - SendMessage
   - Task
+  - Agent
   - TaskStop
   - Write
   - Read
@@ -84,9 +85,12 @@ Current Claude Code has no `TeamCreate` / `TeamDelete` (the team is implicit) an
 
 - **No team lifecycle calls.** Teammates are background agents spawned with a `name`.
 - **The angle list is a file**, `.claude/teams/research-<topic-slug>/angles.md`, written by you.
+- **Investigators run in the background; every other role is a blocking `Task()`** — you wait for
+  the scout's, challenger's, critic's and specialists' reports before moving on.
 - **Investigators never message each other.** A message to a teammate whose turn has finished is
-  reported as sent and silently lost. Cross-angle findings go into the report, and you carry them —
-  your own `SendMessage` to an investigator is always delivered, whether it is still working or done.
+  reported as sent and silently lost. Mid-run they message only you (`SendMessage(to="main")`):
+  a premise problem, or a `CONNECTION for investigator-X:` note. You forward the connection note
+  yourself — your own `SendMessage` to an investigator is always delivered, working or done.
 
 ## Protocol
 
@@ -98,7 +102,6 @@ Current Claude Code has no `TeamCreate` / `TeamDelete` (the team is implicit) an
    ```
    Task(
      subagent_type="team-research:scout",
-     run_in_background=true,
      name="scout",
      prompt="RESEARCH QUESTION: [question]
    Quick-scan the landscape and send findings to lead."
@@ -140,11 +143,12 @@ Current Claude Code has no `TeamCreate` / `TeamDelete` (the team is implicit) an
    ```
 
 2. **While investigators work:**
-   - If an investigator's report touches another angle (its "Connections to Other Angles" section) → forward that part yourself: `SendMessage(to="investigator-<other>")`. Investigators do not message each other.
+   - `CONNECTION for investigator-X: ...` from an investigator → forward it verbatim: `SendMessage(to="investigator-X", message="FROM: investigator-<sender>\n...")`. If X has already reported, add: "Answer with an addendum only if this changes a finding — not a new full report." Investigators do not message each other.
+   - `PREMISE INVALID: ...` → decide now whether to re-scope the angles; do not wait for the other reports.
    - If an investigator gets stuck → give hints about where to look
    - If angles turn out to overlap → redirect to avoid duplication
    - If an ESCALATE signal arrives → note it for Phase 3
-   - **Lead Pull:** You may request a one-sentence status from any investigator at any time ("What's your biggest finding so far?"). Use this to detect dead ends early or spot cross-cutting insights. Decide privately whether to redirect — do NOT share one investigator's content with others.
+   - **Lead Pull:** You may request a one-sentence status from any investigator at any time ("What's your biggest finding so far?"). Use this to detect dead ends early or spot cross-cutting insights. Decide privately whether to redirect — do NOT share one investigator's status answers with others (CONNECTION notes are the exception: they are addressed and meant to be forwarded).
 
 ### Phase 2.5: Cross-Pollinate (5 min)
 
@@ -172,7 +176,6 @@ Spawn a **Challenger agent:**
 ```
 Task(
   subagent_type="team-research:research-challenger",
-  run_in_background=true,
   name="challenger",
   prompt="RESEARCH QUESTION: [the full question]
 
@@ -198,7 +201,6 @@ instead of a message; everything after this point is unchanged.
    ```
    Task(
      subagent_type="team-research:critic",
-     run_in_background=true,
      name="critic",
      prompt="FLAGGED AREAS: [What Challenger flagged as insufficient]
 
@@ -219,14 +221,13 @@ instead of a message; everything after this point is unchanged.
 ```
 Task(
   subagent_type="team-research:specialist",
-  run_in_background=true,
   name="specialist-<domain>",
   prompt="DOMAIN: [domain]
 CONTEXT: Investigator [name] found [what] in [file:line].
 ESCALATE DETAILS: [what was flagged and why]
 
 Deep-review the flagged area using Depth Protocol (WHAT/WHY/FRAGILITY with Source Tags).
-Send findings to lead, then mark your task complete.
+Your final reply is your report.
 Keep it focused — don't expand beyond the flagged area."
 )
 ```

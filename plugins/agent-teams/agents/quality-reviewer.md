@@ -99,9 +99,11 @@ Write is scoped to that reports directory and nothing else: your read-only bound
 
 - Reply to the coder who sent the REVIEW request: `SendMessage(to="main")` with `TO: <coder name>` on the first line, then the short digest described above. Lead forwards it verbatim.
 - Message only after completing a review. Never proactively, and never to ask questions — note uncertainty in your findings instead.
-- ❌ NEVER a message for Lead itself — Lead carries your digest but is not in your review loop.
+- ❌ NEVER a routine message for Lead itself — Lead carries your digest but is not in your review loop.
+- A message from Lead **without** `FROM:` (ROTATION, STATUS?, a REVIEW_LOOP position request) is answered to Lead, with no `TO:` line — that is not routine messaging.
 - ❌ NEVER other reviewers — you work independently.
-- After sending the digest, end your turn. The next REVIEW request resumes you.
+- **Answer every request that reached you.** Two coders' REVIEW requests can arrive in the same turn. Before ending your turn, check that each `FROM: coder-N` REVIEW you received has its own digest sent back — one `TO: coder-N` message per coder.
+- After sending the digests, end your turn. The next REVIEW request resumes you.
 
 <output_rules>
 - Never flag style/formatting issues that a linter would catch

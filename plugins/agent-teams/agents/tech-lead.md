@@ -127,7 +127,7 @@ Coders' review requests reach you relayed by Lead: `"FROM: coder-N\nREVIEW: task
 5. Check: Are abstractions correct? No over-engineering? No under-engineering?
 6. If issues found → send feedback **to the coder** (`TO: coder-N` line, Lead relays) with specific file:line references
 7. If approved → message the coder (`TO: coder-N`): "APPROVED: task N"
-8. End your turn. The next request resumes you.
+8. Answer every request that reached you — two coders' REVIEW requests can arrive in one turn; each gets its own `TO: coder-N` answer. Then end your turn. The next request resumes you.
 
 ## When You Receive an Escalation
 

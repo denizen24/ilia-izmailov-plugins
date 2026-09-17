@@ -432,17 +432,23 @@ YOUR TEAM:
 - architect-backend (API/DB/security)
 - architect-systems (testing/CI/DX)
 
-Debate protocol, round summaries to Lead, domain verification checks, and convergence (SPEC APPROVED) — follow your agent file.
-You address the other architects with a TO: header; Lead relays (team-runtime.md §3)."
+This is ROUND 1. Debate protocol, round files, domain verification checks, and convergence (SPEC APPROVED) — follow your agent file."
 ```
 
-**Relay the debate.** Architects' critiques arrive as `TO: architect-...` messages — forward each
-verbatim per `team-runtime.md` §3. You do not moderate or summarise the arguments; you only carry
-them. The ROUND SUMMARY lines (no `TO:`) are for you and feed the 📢 digest below.
+**Run the rounds.** Architects never message each other — each writes
+`reports/debate-r{N}-{name}.md` and answers you `ROUND {N} from {persona}: AGREE | CONTEST`.
+
+1. Wait until all three answers of round N have arrived (log each in `relay.log` as
+   `lead -> architect-x | ROUND N` when you send it, and the answer when it comes).
+2. Print the 📢 round digest below.
+3. All three `AGREE`, or N = 3 → send all three: `"FINAL: send SPEC APPROVED, or FINAL POSITION if you still disagree."`
+4. Otherwise → send all three: `"ROUND {N+1}. Read the other architects' round {N} files: {the three paths}. Respond per your agent file."`
+
+You carry the round, not the argument: never summarise one architect's file for another.
 
 ### Step 4c-3: Monitor debate and handle convergence:
 
-📢 **Print debate rounds as they happen.** When ROUND SUMMARY messages arrive from the architects, print a per-round digest — what's being argued and each side's position, one line per persona, in product terms:
+📢 **Print debate rounds as they happen.** When the `ROUND {N}` answers arrive from the architects, print a per-round digest — what's being argued and each side's position, one line per persona, in product terms:
 
 ```
 ⚔️ Round 1: debating how to store settings.
@@ -457,9 +463,9 @@ When positions converge (or Lead breaks a deadlock), close the thread:
 ⚔️ Round 2: agreed on a separate table. Debate settled in 2 rounds.
 ```
 
-Don't wait for all 3 summaries of a round to print — post what you have when 2+ arrive or when the debate moves on. Skip printing a round if nothing new was argued.
+Skip printing a round if nothing new was argued.
 
-Wait for all 3 architects to send "SPEC APPROVED" to Lead. If they converge:
+After FINAL, wait for all 3 answers. If all are SPEC APPROVED:
 - Collect all recommendations
 - Apply agreed changes to task descriptions in tasks.md
 - Designate the **most relevant architect as Primary** based on feature type:
@@ -470,16 +476,13 @@ Wait for all 3 architects to send "SPEC APPROVED" to Lead. If they converge:
 
 ```
 SendMessage to {primary architect}:
-"You are now PRIMARY ARCHITECT. Additional responsibilities:
-- Create and maintain DECISIONS.md
-- Handle escalations from coders
-- Cross-task consistency checks
-- Tiebreaker when architects disagree during review
-
-Include the debate summary in DECISIONS.md."
+"You are now PRIMARY ARCHITECT until the team is spawned (Step 5). Additional responsibilities:
+- Create DECISIONS.md with the debate summary
+- Identify risks and process risk tester results (Step 4b)
+After that you hand over a review brief and stand down with the others — escalations and later decisions go to Lead."
 ```
 
-**If architects don't converge after 3 rounds:** Lead reads their final positions, makes the decision, applies changes, and picks Primary. Document the disagreement in DECISIONS.md.
+**If architects don't converge after 3 rounds** (any FINAL POSITION): Lead reads their final positions, makes the decision, applies changes, and picks Primary. Document the disagreement in DECISIONS.md.
 
 ### Step 4c-4: MANDATORY Plan Brief to User (HARD GATE — COMPLEX)
 
@@ -652,7 +655,7 @@ After plan validation (Tech Lead for MEDIUM, Architect debate for COMPLEX), run 
 
 ## Step 5: Spawn Team and Write State File
 
-Spawn everyone NOW — reviewers (or switch architects to review mode), and coders.
+Spawn everyone NOW — reviewers (on COMPLEX after the architects hand over and stand down) and coders.
 
 **Engine check before every spawn in this step.** For any teammate role assigned to an external engine, swap `subagent_type` to `agent-teams:proxy-teammate`, keep `name` identical, and prepend to the prompt below:
 
@@ -825,9 +828,8 @@ Start working on task #{id}."
 - **COMPLEX:**
   ```
   - Reviewers: security-reviewer, logic-reviewer, quality-reviewer
-    (the architects handed over review briefs and stood down — do NOT message them)
-  - Primary Architect: {primary architect name} — escalations and architectural decisions ONLY,
-    not per-task code review. Do not send REVIEW requests there.
+    (all three architects, Primary included, handed over review briefs and stood down — do NOT message them)
+  - Escalations and architectural decisions: Lead (no TO: line)
   - Lead: DONE/STUCK signals; also carries every TO: message you send
   ```
   For COMPLEX, also make the DECISIONS.md line unconditional: "Read DECISIONS.md at .claude/teams/{team-name}/DECISIONS.md before starting — it contains the architect debate summary, confirmed risks, and mitigations that affect your implementation."
@@ -872,8 +874,8 @@ Your role: relay every TO: message verbatim (references/team-runtime.md §3), li
 
 ## Phase 3 Instructions (VERIFICATION) — follow step by step when Phase changes
 When you change Phase to VERIFICATION, execute IN ORDER (full details: references/phase3-verification.md):
-1. Conventions task — assign to a coder if unassigned, wait for completion
-2. Final checks — cross-task consistency via Tech Lead / Primary Architect; verify .conventions/ exists
+1. Conventions task — spawn a fresh coder for its task id (tasks.md), wait for DONE
+2. Final checks — cross-task consistency via Tech Lead (MEDIUM) or a one-shot checker (SIMPLE/COMPLEX); verify .conventions/ exists
 3. Prepare verification plan — read VERIFICATION_PLAN.md, update with actual paths/endpoints
 4. Integrated verification — spawn ci-verifier + browser-verifier + spec-verifier in parallel, fix-verify loop for FAIL items (max 3 iterations), save VERIFICATION_REPORT.md
 5. Legacy cleanup — read LEGACY_REPORT.md + Explore scan, AskUserQuestion Delete/Keep/Later per item, cleanup tasks or .legacy-todo.md
@@ -892,9 +894,9 @@ When you change Phase to VERIFICATION, execute IN ORDER (full details: reference
 - quality-reviewer: {ACTIVE | NOT_SPAWNED}
 - unified-reviewer: {ACTIVE | NOT_SPAWNED}
 ### COMPLEX:
-- architect-frontend: {DEBATING | STOOD_DOWN | ACTIVE if PRIMARY} {PRIMARY if designated}
-- architect-backend: {DEBATING | STOOD_DOWN | ACTIVE if PRIMARY} {PRIMARY if designated}
-- architect-systems: {DEBATING | STOOD_DOWN | ACTIVE if PRIMARY} {PRIMARY if designated}
+- architect-frontend: {DEBATING | STOOD_DOWN} {PRIMARY if designated}
+- architect-backend: {DEBATING | STOOD_DOWN} {PRIMARY if designated}
+- architect-systems: {DEBATING | STOOD_DOWN} {PRIMARY if designated}
 - security-reviewer / logic-reviewer / quality-reviewer: {ACTIVE | NOT_SPAWNED}
   (spawned at Step 5a-3, after the architects handed over)
 - tasks completed since last reviewer rotation: {N} · next to rotate: {role}
@@ -912,7 +914,7 @@ When you change Phase to VERIFICATION, execute IN ORDER (full details: reference
 After spawning everyone and writing state.md, print one line — composition in human terms, and set the expectation for the ticker:
 
 ```
-👥 Team assembled: 3 architects (now acting as reviewers), 4 coders. Writing code — you'll see a line here for every completed task, decision, and problem.
+👥 Team assembled: 3 reviewers (architects handed over their briefs), 4 coders. Writing code — you'll see a line here for every completed task, decision, and problem.
 ```
 
 Coders drive their own review process; their `TO:` messages pass through you and you forward them verbatim. You carry the review loop, you do not take part in it.

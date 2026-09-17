@@ -38,6 +38,9 @@ teammates goes through the lead.**
   Do not pass `team_name`.
 - Record every teammate in the state.md roster. If the runtime returns an agent id and a name is ever
   refused, address that teammate by its id and write the id next to the name in the roster.
+- **Respawning under the same name is safe.** When a newer agent takes a name, `SendMessage(to=name)`
+  reaches the newest one ("latest wins"), so a rotated reviewer or an `ENGINE_DOWN` replacement keeps
+  its name and coders' rosters stay valid.
 - If agent teams are switched off (no `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`, policy, older build),
   nothing below changes: background agents plus lead relay is the whole mechanism.
 
@@ -86,11 +89,18 @@ Gold standard references: src/server/routers/profile.ts
 - `TO:` lists exact roster names, comma-separated. A message without `TO:` is for the lead itself
   (DONE, STUCK, QUESTION, DECISION, ROUND SUMMARY, ...).
 - Send it with `SendMessage(to="main", ...)`. If you are ending your turn anyway, the final reply
-  with the same header works too — it reaches the lead.
+  with the same header works too — it reaches the lead. **One channel per message:** never send it
+  both ways.
 - **After sending something that needs an answer, end your turn.** Do not sleep, poll or re-read
   files while waiting: the answer arrives as a new message from the lead, and that message resumes
   you.
 - Answers you receive start with `FROM: <name>`. Reply to that name through the same `TO:` header.
+- A message from Lead **without** a `FROM:` line is Lead's own question or instruction (ROTATION,
+  STATUS?, a REVIEW_LOOP position request, ROUND N). Answer it to Lead, with no `TO:` line — whatever
+  your role file says about not messaging Lead applies to routine work, not to this.
+- **Exception — proxy teammates while their engine runs.** A proxy that launched its engine in the
+  background stays in its turn until the engine process exits: it has nothing to be resumed by if it
+  ends its turn early. "End your turn while waiting" applies to waiting on teammates, not on your engine.
 - Keep relayed messages short: verdict and file path. Detail lives in `reports/` (SKILL.md,
   "Everything Important Goes to a File") — the lead forwards text, it never reads your files for you.
 
@@ -100,10 +110,26 @@ For each incoming message with a `TO:` header:
 
 1. For every name in `TO:` — `SendMessage(to="<name>", message="FROM: <sender>\n<body without the TO: line>")`.
    One message per recipient, in parallel. **Forward verbatim** — no summarising, no editing, no
-   reading of the referenced files.
-2. Apply the side effects the message implies (e.g. `IN_REVIEW` status in state.md, 📢 feed line).
-3. If a name in `TO:` is not in the roster (stood down, rotated, never spawned), do not forward.
-   Reply to the sender: `ROSTER: <name> is not on the team — current reviewers: ...`.
+   reading of the referenced files. An exact repeat of a message you already forwarded is ignored.
+2. Append one line per recipient to `.claude/teams/{team-name}/relay.log` (see below).
+3. Apply the side effects the message implies (e.g. `IN_REVIEW` status in state.md, 📢 feed line).
+4. If a name in `TO:` is not in the roster (stood down, never spawned), do not forward.
+   Reply to the sender: `ROSTER: <name> is not on the team — current reviewers: ...`. A name that
+   is mid-rotation is not "not on the team": hold the message and forward it to the successor.
+
+### relay.log — what is still owed
+
+One line per forwarded message, appended with `>>`, never rewritten:
+
+```
+{HH:MM} {sender} -> {recipient} | {first line of the body}
+```
+
+A request is **open** until a message from its recipient back to its sender arrives:
+`REVIEW` from coder-2 to logic-reviewer is open until a `logic-reviewer -> coder-2` line exists after
+it; the same for `ESCALATION`, `QUESTION` and debate rounds. The file survives compaction, so this is
+how Lead knows what is owed after losing its context, and which pending review to re-forward when a
+reviewer is rotated or replaced.
 
 Relay costs the lead one short tool call per recipient and keeps it out of the code. It is not
 "coordinating": the lead does not decide who reviews, does not wait for all verdicts, does not judge
@@ -111,10 +137,14 @@ them — coders still drive their own review loop.
 
 ### When an answer does not come
 
-A missing answer means a lost or unsent message, not a slow teammate. Before anything else, check
-your own transcript: did you forward it? If not, forward it now. If you did and the recipient ended
-its turn without acting on it, send it again once with `RESEND:` in front of the body. Only a
-recipient that ignores a resend is treated as stuck (phase2-monitoring.md).
+A missing answer means a lost or unsent message, not a slow teammate. Nothing wakes a team in which
+every member has ended its turn — so the check has a fixed trigger:
+
+**Idle check — before Lead ends a turn while work is unfinished and no teammate or engine is
+running,** read `relay.log` and find open requests. For each one: if the recipient ended its turn
+without answering, send the request again once with `RESEND:` in front of the body. A message you
+received but never forwarded (no `relay.log` line) — forward it now. Only a recipient that ignores a
+resend is treated as stuck (phase2-monitoring.md).
 
 ## 4. Ending the run
 

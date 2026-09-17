@@ -12,7 +12,7 @@ The conventions task (the last section of tasks.md) should now be unblocked. Spa
 
 The coder receives the task description which tells them exactly what to create/update (signal sources are listed there). If `.conventions/` didn't exist before, bootstrap it with the key patterns researchers identified.
 
-The conventions task is tracked in tasks.md and state.md like any other task. It goes through the same review flow (coder implements → reviewers check → Tech Lead approves → commit).
+The conventions task is tracked in tasks.md and state.md like any other task. It goes through the same review flow as Phase 2 (coder implements → the approvers in its roster check — plus Tech Lead on MEDIUM → commit).
 
 After the conventions task is done, report what was created/updated in the summary.
 

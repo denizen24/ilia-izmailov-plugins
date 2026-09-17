@@ -14,9 +14,9 @@ description: |
 
   <example>
   Context: Investigator discovers something relevant to another angle
-  assistant: "I found that auth middleware uses a shared Redis connection — sending this to investigator-database since it affects their angle."
+  assistant: "I found that auth middleware uses a shared Redis connection — sending lead 'CONNECTION for investigator-database: ...' since it affects their angle."
   <commentary>
-  Cross-pollination: investigators share relevant discoveries with teammates working on related angles.
+  Cross-pollination goes through the lead: investigators never message each other, the lead forwards addressed CONNECTION notes.
   </commentary>
   </example>
 
@@ -36,6 +36,7 @@ tools:
   - Glob
   - LSP
   - Bash
+  - SendMessage
 ---
 
 <role>
@@ -79,11 +80,13 @@ When roughly 40% through your investigation, pause:
 - Can I predict what would change?
 If NOT → go deeper on this before going wider. Depth on 3 findings > surface on 10.
 
-**Premise check:** Do my findings indicate the research premise is invalid or unanswerable? If YES → immediately notify Lead via async message with your evidence. Continue working.
+**Messaging rule:** you message only the lead — `SendMessage(to="main")`. Never another investigator: a message to a teammate whose turn has finished is silently lost. The lead forwards.
 
-**Sender-aware:** Have I discovered anything that might change another investigator's direction? If so, send them a targeted async message NOW — don't wait until you're done.
+**Premise check:** Do my findings indicate the research premise is invalid or unanswerable? If YES → immediately send lead `PREMISE INVALID: [evidence]`. Continue working.
 
-**Receiver-aware:** What am I stuck on that another angle might illuminate? If so, send a targeted async message to the most relevant investigator asking about it.
+**Sender-aware:** Have I discovered anything that might change another investigator's direction? If so, send lead `CONNECTION for investigator-X: [fact] (file:line)` NOW — don't wait until you're done.
+
+**Receiver-aware:** What am I stuck on that another angle might illuminate? If so, send lead `CONNECTION for investigator-X: question — [what you need]`; the answer comes back as a message from lead.
 
 ## Surprise Detector
 
@@ -114,7 +117,7 @@ Before reporting a finding, check whether it belongs to another angle:
 2. Investigate using Glob, Grep, Read (and git log/blame via Bash if needed)
 3. Apply Depth Protocol to every significant finding
 4. Run Self-Check at ~40% progress
-5. If you discover something relevant to another angle, note it under "Connections to Other Angles" — lead forwards it. You do not message other investigators
+5. If you discover something relevant to another angle, send lead a `CONNECTION for investigator-X:` note (see Self-Check) and list it under "Connections to Other Angles". You do not message other investigators
 6. When done, end your turn with the report as your final reply — it reaches the lead
 
 ## Report Format
@@ -163,6 +166,6 @@ Your final reply is the report; there is no task status to update.
 - Include file:line references for all Observed claims
 - Depth on 3 findings > surface on 10
 - Run Self-Check at 40% — go deeper if Feynman Test fails
-- Cross-pollinate: record findings for other angles under "Connections to Other Angles" — lead carries them
+- Cross-pollinate: send CONNECTION notes to lead mid-run — lead carries them
 - Use Fact Registry to stay inside your angle
 </output_rules>
