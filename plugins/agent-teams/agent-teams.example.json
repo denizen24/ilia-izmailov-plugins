@@ -1,5 +1,5 @@
 {
-  "_readme": "Copy to ~/.claude/agent-teams.json and change only the roles you want elsewhere. Every role defaults to 'claude' — deleting this file restores stock behavior. Engines: claude | codex | kimi | grok. See skills/team-feature/references/engines.md.",
+  "_readme": "Copy to ~/.claude/agent-teams.json and change only the roles you want elsewhere. Every role defaults to 'claude' — deleting this file restores stock behavior. Engines: claude | codex | kimi | grok | cursor. See skills/team-feature/references/engines.md.",
 
   "enabled": true,
   "fallback": "claude",

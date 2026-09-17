@@ -82,7 +82,7 @@ The `.conventions/` directory is the **single source of truth** for project patt
 ## Engines — Who Backs Each Role
 
 Every role runs on **Claude by default**. A user MAY reassign individual roles to an external CLI
-agent (Codex, Kimi, Grok) in `~/.claude/agent-teams.json` — external work bills against a different
+agent (Codex, Kimi, Grok, Cursor) in `~/.claude/agent-teams.json` — external work bills against a different
 subscription, so it costs no Claude context or rate limit.
 
 - **No config file → nothing changes.** This is the stock path and must stay zero-cost: Step 0b exits
@@ -239,7 +239,7 @@ Per-run artifacts live in `.claude/teams/{team-name}/`:
 |-----------|-----------------|-----------|
 | `reports/` | Review findings, architect debate rounds, researcher / risk / verifier reports | Reviewers, architects, Lead |
 | `engine/` | Prompts, session ids and raw output of external CLI runs | Proxy teammates, Lead |
-| `ledger.jsonl` | One line per external engine run: role, task, session id, outcome. **The address of the engine's own recording** — Codex, Kimi and Grok each keep the full conversation themselves, so this is what makes theirs findable and resumable. Rebuildable with `scripts/engine-sessions.py` | Whoever launches the run |
+| `ledger.jsonl` | One line per external engine run: role, task, session id, outcome. **The address of the engine's own recording** — Codex, Kimi, Grok and Cursor each keep the full conversation themselves, so this is what makes theirs findable and resumable. Rebuildable with `scripts/engine-sessions.py` | Whoever launches the run |
 | root | `state.md`, `DECISIONS.md`, `VERIFICATION_PLAN.md`, `VERIFICATION_REPORT.md`, `LEGACY_REPORT.md` | Lead, Tech Lead / Primary Architect |
 
 Rules:
