@@ -119,15 +119,20 @@ For each incoming message with a `TO:` header:
 
 ### relay.log — what is still owed
 
-One line per forwarded message, appended with `>>`, never rewritten:
+Create it empty at Step 5, before the first teammate is spawned. One line per message Lead forwards
+or sends itself, and one per answer addressed to Lead, appended with `>>`, never rewritten:
 
 ```
 {HH:MM} {sender} -> {recipient} | {first line of the body}
+{HH:MM} lead -> architect-backend | ROUND 2
+{HH:MM} architect-backend -> lead | ROUND 2 from BACKEND: AGREE
+{HH:MM} lead -> x | CLOSED: {what}      (closes everything open towards x for that subject)
 ```
 
 A request is **open** until a message from its recipient back to its sender arrives:
 `REVIEW` from coder-2 to logic-reviewer is open until a `logic-reviewer -> coder-2` line exists after
-it; the same for `ESCALATION`, `QUESTION` and debate rounds. The file survives compaction, so this is
+it; the same for `ESCALATION`, `QUESTION`, and `ROUND N` until `architect-x -> lead | ROUND N ...`.
+Write `CLOSED:` when a request stops mattering (debate ended with FINAL, a task was re-scoped). The file survives compaction, so this is
 how Lead knows what is owed after losing its context, and which pending review to re-forward when a
 reviewer is rotated or replaced.
 
@@ -141,10 +146,18 @@ A missing answer means a lost or unsent message, not a slow teammate. Nothing wa
 every member has ended its turn — so the check has a fixed trigger:
 
 **Idle check — before Lead ends a turn while work is unfinished and no teammate or engine is
-running,** read `relay.log` and find open requests. For each one: if the recipient ended its turn
-without answering, send the request again once with `RESEND:` in front of the body. A message you
-received but never forwarded (no `relay.log` line) — forward it now. Only a recipient that ignores a
-resend is treated as stuck (phase2-monitoring.md).
+running.** In this order:
+
+1. **Flush first.** Every `TO:` message you received but never forwarded (no `relay.log` line) —
+   forward and log it now. Forwarding an answer closes the request it answers.
+2. **Then resend what is still open**, skipping any recipient marked `STOOD_DOWN` in state.md (close
+   those with `CLOSED:` instead) and any name mid-rotation (its requests are held for the successor).
+   Keep the envelope intact — the resend must look like the original with one extra line:
+   `FROM: <original sender>\nRESEND:\n<original body>` (for Lead's own requests: `RESEND:\n<body>`).
+3. Only a recipient that ignores a resend is treated as stuck (phase2-monitoring.md).
+
+A teammate that receives a `RESEND:` for something it already answered sends the same answer again —
+no new review.
 
 ## 4. Ending the run
 

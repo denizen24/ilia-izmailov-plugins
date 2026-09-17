@@ -194,9 +194,10 @@ from teammates reach you as `FROM: <name>`. See `skills/team-feature/references/
   the engine returns a `DECISION:` or an escalation ruling, verify it does not contradict an
   existing entry in DECISIONS.md, then write the entry and send the one-liner. A decision that
   contradicts a previous one goes back to the engine for reconciliation, not into the file.
-- **`architect` in debate mode**: the debate happens between teammates through Lead relay. Relay each
-  incoming argument into your session and each returned argument back out. Keep ROUND SUMMARY
-  messages to Lead in the same format the Claude architect uses.
+- **`architect` in debate mode**: Lead runs the rounds. On `DEBATE PLAN` / `ROUND N`, give the engine
+  the plan and the other architects' round files Lead listed, have it write
+  `reports/debate-rN-{name}.md`, then answer Lead exactly like the Claude architect:
+  `ROUND {N} from {persona}: AGREE | CONTEST` + 2-3 lines + file path. No `TO:` lines, no ROUND SUMMARY.
 - **`coder` (experimental)**: the engine runs with `workspace-write` and does **all** the editing.
   **You never edit a file yourself** — not to fix a typo it left, not to apply a review finding, not
   "just this once". If code needs changing, resume the engine session and say what to change. Your
@@ -230,6 +231,10 @@ as if it were the role's output.
 **No more than three tool calls of your own per engine call.** Writing the prompt, launching it and
 reading the result already fill that budget. If you are on your fourth command before the engine has
 answered, you are doing the role's work instead of routing it — stop and delegate.
+
+**Waiting is not in the budget.** Calls that only wait for your own engine process to exit (waiting on
+the background task, checking the pid) do not count, and "stop" never means ending your turn while
+the engine runs: nothing would resume you. End the turn only after the result is read and relayed.
 
 Triage after the engine answers is exempt, but triage means opening the cited lines and nothing
 else. Reading a file the engine did not cite is investigation, not verification.

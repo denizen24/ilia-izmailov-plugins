@@ -435,11 +435,12 @@ YOUR TEAM:
 This is ROUND 1. Debate protocol, round files, domain verification checks, and convergence (SPEC APPROVED) — follow your agent file."
 ```
 
-**Run the rounds.** Architects never message each other — each writes
+**Run the rounds.** Create `.claude/teams/{team-name}/relay.log` empty before sending round 1. Architects never message each other — each writes
 `reports/debate-r{N}-{name}.md` and answers you `ROUND {N} from {persona}: AGREE | CONTEST`.
 
-1. Wait until all three answers of round N have arrived (log each in `relay.log` as
-   `lead -> architect-x | ROUND N` when you send it, and the answer when it comes).
+1. Wait until all three answers of round N have arrived. Log `lead -> architect-x | ROUND N` when you
+   send and `architect-x -> lead | ROUND N from ...` when the answer comes (`team-runtime.md` §3). After
+   the FINAL answers, log `lead -> architect-x | CLOSED: debate` for all three.
 2. Print the 📢 round digest below.
 3. All three `AGREE`, or N = 3 → send all three: `"FINAL: send SPEC APPROVED, or FINAL POSITION if you still disagree."`
 4. Otherwise → send all three: `"ROUND {N+1}. Read the other architects' round {N} files: {the three paths}. Respond per your agent file."`
@@ -834,7 +835,11 @@ Start working on task #{id}."
   ```
   For COMPLEX, also make the DECISIONS.md line unconditional: "Read DECISIONS.md at .claude/teams/{team-name}/DECISIONS.md before starting — it contains the architect debate summary, confirmed risks, and mitigations that affect your implementation."
 
-### 3. Initialize Legacy Report
+### 3. Initialize Legacy Report and relay.log
+
+Create `.claude/teams/{team-name}/relay.log` empty (on COMPLEX it already exists from the debate) —
+every forwarded message is logged there (`team-runtime.md` §3).
+
 
 Create an empty legacy report so coders have a single place to append findings during implementation:
 
@@ -866,7 +871,8 @@ If you lost context after compaction, read this file.
 ## Team Name: feature-{short-name}
 
 ## Phase 2 Instructions (EXECUTION)
-Your role: relay every TO: message verbatim (references/team-runtime.md §3), listen for DONE/STUCK/ESCALATE.
+Your role: relay every TO: message verbatim and log it in relay.log (references/team-runtime.md §3), listen for DONE/STUCK/ESCALATE.
+- Before ending a turn while no teammate is running: idle check against relay.log (team-runtime.md §3)
 - DO NOT read code, run checks, pick reviewers, or edit relayed messages — coders drive their own review loop
 - Update this file after each event
 - Print a progress feed line to chat for each event — task digests, decisions, stuck reports (see phase2-monitoring.md event table). The user is watching the run live.
