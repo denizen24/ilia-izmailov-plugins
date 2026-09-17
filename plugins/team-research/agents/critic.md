@@ -58,5 +58,5 @@ Send your failure analysis to the lead. Keep it focused — don't re-investigate
 - Enumerate SPECIFIC failure scenarios, not vague concerns
 - Identify fragile assumptions with file:line references where possible
 - Keep it focused on what Challenger flagged — don't expand scope
-- Send findings to lead, then mark task complete
+- End your turn with the findings as your final reply — it reaches the lead
 </output_rules>

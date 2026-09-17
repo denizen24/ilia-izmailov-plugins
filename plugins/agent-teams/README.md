@@ -187,7 +187,7 @@ the run.
 
 **Specialized Review**
 
-Coders drive the review process. Every message between teammates travels through Lead, which forwards it verbatim and stays out of the code — see "How the team talks" below.
+Coders drive the review process. Every message between teammates travels through Lead, which forwards it verbatim and stays out of the code — see "How the team talks" above.
 
 **SIMPLE** — one Unified Reviewer covers security basics, logic, and quality in a single pass. Automatically escalates to MEDIUM if code touches sensitive areas.
 
@@ -199,11 +199,11 @@ Coders drive the review process. Every message between teammates travels through
 | **Logic** | Race conditions, off-by-one errors, null pointer exceptions, async issues |
 | **Quality** | DRY violations, unclear naming, missing abstractions, convention drift |
 
-**COMPLEX** — the 3 Architects serve as domain-specific reviewers (no separate security/logic/quality reviewers needed).
+**COMPLEX** — the same three reviewers as MEDIUM, each primed with the review brief its domain architect wrote before standing down.
 
 **Architectural Approval**
 
-After reviewers finish, Tech Lead (MEDIUM) or Primary Architect (COMPLEX) gives final sign-off on cross-task consistency.
+After reviewers finish, Tech Lead (MEDIUM) or a one-shot consistency checker (SIMPLE/COMPLEX) gives final sign-off on cross-task consistency.
 
 #### Phase 3: Completion & Verification
 
@@ -275,7 +275,7 @@ These conventions are used by `/team-feature` as few-shot examples for coders. R
 | **Codebase Researcher** | One-shot | Returns condensed project summary (structure, stack, patterns) |
 | **Reference Researcher** | One-shot | Returns full content of best example files for each layer |
 | **Tech Lead** | Permanent (MEDIUM) | Validates plan, architectural review, maintains DECISIONS.md |
-| **Architect** | Permanent (COMPLEX) | Debates spec, then reviews code in domain. 3 personas: Frontend, Backend, Systems |
+| **Architect** | Debate only (COMPLEX) | Debates spec in Lead-run rounds, writes a domain review brief, stands down. 3 personas: Frontend, Backend, Systems |
 | **Coder** | Per task | Implements matching gold standards, self-checks, requests review through Lead relay |
 | **Security Reviewer** | Permanent (MEDIUM) | Injection, XSS, auth bypasses, IDOR, secrets |
 | **Logic Reviewer** | Permanent (MEDIUM) | Race conditions, edge cases, null handling, async |

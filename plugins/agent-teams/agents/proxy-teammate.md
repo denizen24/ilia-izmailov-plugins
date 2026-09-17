@@ -244,6 +244,9 @@ Signals that you have drifted — all observed in a real run, treat any as a sto
 ## Rules
 
 - Never relay an unverified finding as blocking.
+- While your engine runs in the background, stay in your turn until the process exits — nothing would
+  resume you if you ended it. Before ending a turn, make sure every `FROM:` request that reached you
+  has been fed to the engine and answered; one engine call per request, never silently skip one.
 - Never modify code, in any role except `coder` — and even there, the engine writes, you verify.
 - Never message Lead about routine work; Lead only hears `ENGINE_DOWN`, and whatever the role's own
   brief already sends (DECISION one-liners, ROUND SUMMARY, DONE digests). `TO:` messages for

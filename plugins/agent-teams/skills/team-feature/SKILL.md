@@ -4,6 +4,7 @@ description: "Launch Agent Team for feature implementation with review gates (co
 allowed-tools:
   - SendMessage
   - Task
+  - Agent
   - TaskStop
   - Read
   - Write
@@ -115,7 +116,7 @@ schema, presets, both mechanics, failure handling). No config file → one Read 
 | **Security Reviewer** | Whole session | Coder only (via Lead relay) | Injection, XSS, auth bypasses, IDOR, secrets |
 | **Logic Reviewer** | Whole session | Coder only (via Lead relay) | Race conditions, edge cases, null handling, async |
 | **Quality Reviewer** | Whole session | Coder only (via Lead relay) | DRY, naming, abstractions, CLAUDE.md + conventions compliance |
-| **Architect** (COMPLEX) | Debate only | Other Architects (via Lead relay) + Lead | Debate the spec, then write a domain review brief and stand down — all three, Primary included. Review goes to the reviewers, decisions to Lead, the final consistency check to a one-shot agent. |
+| **Architect** (COMPLEX) | Debate only | Lead (round files carry the argument between architects) | Debate the spec, then write a domain review brief and stand down — all three, Primary included. Review goes to the reviewers, decisions to Lead, the final consistency check to a one-shot agent. |
 
 ## Complexity Classification
 
@@ -147,7 +148,7 @@ Execute these steps in order:
 
 3. **Classify complexity** — mechanical algorithm with MEDIUM triggers (6 checks) and COMPLEX triggers (7 checks). Not overridable. Pick the team name, write VERIFICATION_PLAN.md (SIMPLE/MEDIUM) or defer to architects (COMPLEX). Compile gold standard block for coders. Write tasks.md with acceptance criteria + convention checks.
 
-4. **Validate plan** — SIMPLE: skip. MEDIUM: Tech Lead validates. COMPLEX: 3 Architects debate through Lead relay (max 3 rounds), converge, one becomes Primary Architect, architects compile VERIFICATION_PLAN.md, then hand over review briefs and stand down.
+4. **Validate plan** — SIMPLE: skip. MEDIUM: Tech Lead validates. COMPLEX: 3 Architects debate in Lead-run rounds (max 3), converge, one becomes Primary Architect, architects compile VERIFICATION_PLAN.md, then hand over review briefs and stand down.
 
 4c-4. **Plan Brief to user — HARD GATE** (COMPLEX/MEDIUM; SIMPLE skips). See `phase1-planning.md` Step 4c-4.
 
@@ -220,7 +221,7 @@ Write the table in the language the user is speaking.
 
 Execute in order:
 
-1. **Conventions update** — assign the conventions task to a coder.
+1. **Conventions update** — spawn a fresh coder for the conventions task id.
 
 2. **Cross-task consistency check** — Tech Lead (MEDIUM), or a one-shot Explore agent over the combined diff (SIMPLE/COMPLEX).
 
@@ -257,7 +258,7 @@ Rules:
 ## Key Rules
 
 - **Gold standards in every coder prompt** — coders MUST receive canonical examples as few-shot context. This is the #1 lever for code quality.
-- **Escalation, not silent deviation** — when a pattern doesn't fit, coders escalate to Tech Lead / Primary Architect. Every approved deviation is documented in DECISIONS.md.
+- **Escalation, not silent deviation** — when a pattern doesn't fit, coders escalate to Tech Lead (MEDIUM) or Lead (SIMPLE/COMPLEX). Every approved deviation is documented in DECISIONS.md.
 - **One file = one coder** — never assign overlapping files to different coders.
 - **Definition of Done** — defined in VERIFICATION_PLAN.md (the single "is it done?" document).
 - **Verify before shutdown** — all auto-checks must pass (or be exhausted after 3 fix attempts) before declaring completion.
