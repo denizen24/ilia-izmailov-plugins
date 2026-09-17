@@ -115,18 +115,19 @@ The Lead synthesizes all findings into a structured report with:
 **Every role runs on Claude by default. With no config file, nothing here applies.**
 
 If you have other coding CLIs installed (Codex, Kimi, Grok, Cursor), you can move the one-shot roles —
-`scout`, `research-challenger`, `critic`, `specialist` — to another model. The point is not the other
+`research-scout`, `research-challenger`, `research-critic`, `research-specialist` — to another model. The point is not the other
 subscription but the other model's blind spots: a challenger on a different model disagrees with the
 investigators in different places, which is what Phase 3 is for.
 
 The config is the same `~/.claude/agent-teams.json` the `agent-teams` plugin reads; each plugin takes
-only its own role IDs:
+only its own role IDs, and this plugin's carry the `research-` prefix so a shared file cannot aim
+at another plugin's `critic` by accident:
 
 ```json
 {
   "roles": {
     "research-challenger": { "engine": "cursor", "model": "cursor-grok-4.6-xhigh" },
-    "critic": "codex"
+    "research-critic": "codex"
   }
 }
 ```
