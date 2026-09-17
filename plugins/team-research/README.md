@@ -73,7 +73,7 @@ Every claim is tagged with its source:
 - **Inferred** — logical conclusion from observations
 - **Hypothesized** — best guess, needs verification
 
-Investigators can communicate with each other for cross-pollination.
+Investigators do not message each other: cross-angle findings go into their reports and the Lead forwards them (current Claude Code silently drops a message to a teammate whose turn has finished).
 
 ### Phase 2.5: Cross-Pollinate
 

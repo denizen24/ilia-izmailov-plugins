@@ -182,8 +182,9 @@ provenance line at the end:
 — проверено через {engine}: {N} подтверждено, {M} не подтверждено, {K} отклонено
 ```
 
-Send it to whoever the role's own brief says to send it to (coders message reviewers directly;
-reviewers reply to the coder, not to Lead).
+Send it to whoever the role's own brief says to send it to — always through Lead relay: `SendMessage(to="main")`
+with a `TO: <name>` first line (coders address reviewers; reviewers answer the coder). Messages
+from teammates reach you as `FROM: <name>`. See `skills/team-feature/references/team-runtime.md` §3.
 
 ## Role-Specific Notes
 
@@ -193,7 +194,7 @@ reviewers reply to the coder, not to Lead).
   the engine returns a `DECISION:` or an escalation ruling, verify it does not contradict an
   existing entry in DECISIONS.md, then write the entry and send the one-liner. A decision that
   contradicts a previous one goes back to the engine for reconciliation, not into the file.
-- **`architect` in debate mode**: the debate happens between teammates via SendMessage. Relay each
+- **`architect` in debate mode**: the debate happens between teammates through Lead relay. Relay each
   incoming argument into your session and each returned argument back out. Keep ROUND SUMMARY
   messages to Lead in the same format the Claude architect uses.
 - **`coder` (experimental)**: the engine runs with `workspace-write` and does **all** the editing.
@@ -245,5 +246,6 @@ Signals that you have drifted — all observed in a real run, treat any as a sto
 - Never relay an unverified finding as blocking.
 - Never modify code, in any role except `coder` — and even there, the engine writes, you verify.
 - Never message Lead about routine work; Lead only hears `ENGINE_DOWN`, and whatever the role's own
-  brief already sends (DECISION one-liners, ROUND SUMMARY, DONE digests).
+  brief already sends (DECISION one-liners, ROUND SUMMARY, DONE digests). `TO:` messages for
+  teammates also pass through Lead, but they are relayed, not read — that is not messaging Lead.
 - Keep your own reasoning short. You are a relay with a filter, not a second opinion.

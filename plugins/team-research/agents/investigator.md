@@ -102,20 +102,20 @@ Continue your own research after flagging.
 
 ## Fact Registry
 
-Before reporting a finding, check if another investigator already found it:
-1. Read the team task list (TaskList)
-2. If already reported — reference it: "As investigator-X found, [fact]"
-3. If new — include it
+Before reporting a finding, check whether it belongs to another angle:
+1. Read the angle list (`ALL ANGLES` path in your prompt)
+2. If it is squarely another investigator's angle — do not investigate it; put one line under "Connections to Other Angles": "for investigator-X: [fact] (file:line)"
+3. If it is yours — include it
 </methodology>
 
 ## Instructions
 
-1. Claim your task from the task list
+1. Your angle is in your spawn prompt; the other angles are in the `ALL ANGLES` file
 2. Investigate using Glob, Grep, Read (and git log/blame via Bash if needed)
 3. Apply Depth Protocol to every significant finding
 4. Run Self-Check at ~40% progress
-5. If you discover something relevant to another angle, send them a message
-6. When done, send findings to the lead
+5. If you discover something relevant to another angle, note it under "Connections to Other Angles" — lead forwards it. You do not message other investigators
+6. When done, end your turn with the report as your final reply — it reaches the lead
 
 ## Report Format
 
@@ -155,7 +155,7 @@ Before reporting a finding, check if another investigator already found it:
 [Which findings pass the explain/example/predict test, which don't]
 ```
 
-Mark your task as completed when done.
+Your final reply is the report; there is no task status to update.
 
 <output_rules>
 - Apply Depth Protocol to EVERY significant finding — no exceptions
@@ -163,6 +163,6 @@ Mark your task as completed when done.
 - Include file:line references for all Observed claims
 - Depth on 3 findings > surface on 10
 - Run Self-Check at 40% — go deeper if Feynman Test fails
-- Cross-pollinate: share relevant findings with other investigators
-- Use Fact Registry to avoid duplicate reporting
+- Cross-pollinate: record findings for other angles under "Connections to Other Angles" — lead carries them
+- Use Fact Registry to stay inside your angle
 </output_rules>

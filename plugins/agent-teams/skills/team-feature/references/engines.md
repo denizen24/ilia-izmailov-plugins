@@ -231,8 +231,8 @@ session with the engine's `resume` command rather than starting over.
 
 ## Mechanic B: Proxy Teammate
 
-For conversational roles. The team keeps its shape: the coder still sends
-`SendMessage(recipient="security-reviewer", ...)` and gets a normal review back.
+For conversational roles. The team keeps its shape: the coder still sends `TO: security-reviewer`
+through Lead relay (`team-runtime.md` §3) and gets a normal review back.
 
 Spawn `agent-teams:proxy-teammate` with the same `name` the Claude teammate would have had, and a
 prompt containing:

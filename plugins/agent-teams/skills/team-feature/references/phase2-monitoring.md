@@ -2,7 +2,7 @@
 
 ## Lead's Role: Coordinate Minimally, Narrate Continuously
 
-Coders communicate directly with reviewers/architects and tech-lead/primary-architect via SendMessage. Lead handles progress tracking and exceptional events — and **prints a live feed line for every meaningful event** (📢 column below). This is the user's only window into the work; without it Phase 2 is a black box.
+Coders drive the review loop with reviewers and tech-lead; **every message between them passes through Lead**, which forwards it verbatim (`team-runtime.md` §3 — a teammate's direct message to an idle teammate is silently lost). Lead also handles progress tracking and exceptional events — and **prints a live feed line for every meaningful event** (📢 column below). This is the user's only window into the work; without it Phase 2 is a black box.
 
 Feed rules: user's language, product terms, one entry per event, always include the progress counter `{done}/{total}` on task events. See "Progress Feed" in SKILL.md.
 
@@ -10,9 +10,10 @@ Feed rules: user's language, product terms, one entry per event, always include 
 
 | Event from team member | Action | 📢 Print to chat |
 |------------------------|--------|------------------|
+| Any teammate: message whose first line is `TO: <names>` | Forward verbatim, one `SendMessage` per name, body prefixed `FROM: <sender>` (`team-runtime.md` §3). Name not on the roster → tell the sender, don't forward. Do not read the files it mentions. | Nothing by itself — print only the event the body carries (e.g. a `REVIEW` after `IN_REVIEW` needs no second line). |
 | Coder: `IN_REVIEW: task #N` | Update state.md (mark IN_REVIEW). | `🔎 Task #N in review: {short title}` |
-| Coder: `DONE: task #N` (any variant) | Update state.md (mark completed). If unassigned tasks remain AND active coders < max, spawn new coder with team roster. If coder claimed next task — no spawn needed. | Task-done digest — see "Task-Done Digest" below. |
-| Coder: `DONE: task #N. ALL MY TASKS COMPLETE` | Update state.md. Check if ALL coding tasks done → **change Phase in state.md to VERIFICATION and follow Phase 3 Instructions in state.md step by step.** If unassigned remain, spawn new coder. | Task-done digest. If transitioning: `🏁 All {N} tasks done — moving to verification.` |
+| Coder: `DONE: task #N` (any variant) | Update state.md (mark completed). If unblocked unassigned tasks remain AND active coders < max, spawn a new coder for the next task id (coders stand down after one task). | Task-done digest — see "Task-Done Digest" below. |
+| Last coding task reported `DONE` | Update state.md. Check if ALL coding tasks done → **change Phase in state.md to VERIFICATION and follow Phase 3 Instructions in state.md step by step.** If unassigned remain, spawn new coder. | Task-done digest. If transitioning: `🏁 All {N} tasks done — moving to verification.` |
 | Coder: `QUESTION: task #N. [question]` | Answer from Phase 1 context if possible. If not — dispatch a researcher (Explore or general-purpose with WebSearch), then SendMessage the answer to coder. | Only if a researcher was dispatched: `🔍 Task #N raised a question ({what, in product terms}) — researching.` Answered-from-context questions are noise, don't print. |
 | Coder: `STUCK: task #N` | First, try to answer from Phase 1 context. Only dispatch a researcher if the problem requires reading code not yet seen. Then: adjust the task, split it, or reassign to a different coder. | `⏸️ Task #N stuck: {problem in product terms} — {what Lead is doing about it}` |
 | Coder: `LEGACY_FOUND: task #N` | Note it (entries are in LEGACY_REPORT.md; handled in Phase 3). | `🧹 Task #N left old code behind ({N} item(s)) — I'll ask you what to do with it at the end.` |
@@ -41,7 +42,7 @@ The "Signal over noise" rules in SKILL.md apply. In addition: **never repeat any
 
 ## What Lead Does NOT Do
 
-Full list in SKILL.md and state.md — in short: no reading or reviewing code, no running checks, no forwarding messages (teammates communicate directly).
+Full list in SKILL.md and state.md — in short: no reading or reviewing code, no running checks, no picking reviewers, no editing or judging the messages you relay. Relaying itself is your job: a `TO:` message you did not forward is a review that never happens.
 
 ## State File Updates
 
@@ -122,7 +123,8 @@ When the counter comes up for reviewer X:
    - what deserves extra suspicion in the remaining tasks
    Do NOT summarise your individual reviews — they are all in reports/. Then send DONE and stop.
    ```
-2. Wait for DONE, then shut X down.
+2. Wait for DONE — X's turn ends with it, there is no process to shut down. Hold any `TO: X` message
+   that arrives meanwhile and forward it to the successor once it is spawned.
 3. Spawn a fresh reviewer under **the same name** (so coders' rosters stay valid), with the normal
    Step 5 prompt plus:
    ```
@@ -143,16 +145,18 @@ in flight, and no coder is waiting on an answer.
 
 When a coder reports "DONE" and unassigned tasks remain:
 1. Update state.md (mark task completed)
-2. If active coders < max AND unassigned tasks exist (if the `coder` role is on an external engine per the `## Engines` section of state.md, spawn `agent-teams:proxy-teammate` with the same name and the coder role brief instead — see `engines.md` Mechanic B):
+2. If active coders < max AND unblocked unassigned tasks exist (if the `coder` role is on an external engine per the `## Engines` section of state.md, spawn `agent-teams:proxy-teammate` with the same name and the coder role brief instead — see `engines.md` Mechanic B):
    ```
    Task(
      subagent_type="agent-teams:coder",
-     team_name="feature-<short-name>",
      name="coder-<N>",
+     run_in_background=true,
      prompt="You are Coder #{N}. Team: feature-<short-name>.
 
-   YOUR TEAM ROSTER:
+   YOUR TEAM ROSTER (address them with a TO: header — Lead relays):
    {current roster from state.md}
+
+   YOUR TASK: #{id} — read its section in .claude/teams/{team-name}/tasks.md
 
    {If foreign changes were present at Step 5, repeat the FOREIGN CHANGES block here —
     re-run `git status --short` first, since the list may have grown mid-run.}
@@ -161,7 +165,7 @@ When a coder reports "DONE" and unassigned tasks remain:
    {GOLD STANDARD BLOCK}
    --- END GOLD STANDARDS ---
 
-   Claim your next task from the task list and start working."
+   Start working on task #{id}."
    )
    ```
 3. Update state.md with new coder
@@ -175,7 +179,7 @@ When things go wrong, handle without involving the user:
 | Tech Lead rejects architecture > 2 times (MEDIUM) | Review the disagreement. Only dispatch a web researcher if genuinely lacking domain knowledge. Make the final call, document in DECISIONS.md. |
 | Coder escalates "pattern doesn't fit" | MEDIUM: forward to Tech Lead. SIMPLE and COMPLEX: decide yourself — this is a scope question and you own the plan. Check the architect review briefs in `reports/` first, they often already answer it. If unsure, dispatch a web researcher. Document in DECISIONS.md. |
 | Build/tests fail after all tasks | Create targeted fix tasks. Only fix what's broken, don't redo completed work. |
-| A coder goes idle unexpectedly | **Never conclude an agent is dead from files not changing.** Message delivery between teammates can lag by tens of minutes, and an external engine can work for a long time without touching anything. Ask `STATUS?` and wait for an answer. Only after an explicit no-response — a second unanswered `STATUS?` well past any `ENGINE RUNNING` estimate — shut the coder down, confirm the shutdown, and only then spawn a replacement. **Never run two coders on the same files**; a duplicate destroys the first one's uncommitted work. |
+| A coder goes idle unexpectedly | **Never conclude an agent is dead from files not changing** — an external engine can work for a long time without touching anything. **First check the relay:** a coder waiting on reviews ends its turn, so silence usually means a verdict you never forwarded, or a `TO:` message you missed. Search your own transcript for the coder's last `TO:` and for replies addressed to it; forward whatever is missing (`team-runtime.md` §3, "When an answer does not come"). Only then ask `STATUS?` and wait for an answer. Only after an explicit no-response — a second unanswered `STATUS?` well past any `ENGINE RUNNING` estimate — shut the coder down, confirm the shutdown, and only then spawn a replacement. **Never run two coders on the same files**; a duplicate destroys the first one's uncommitted work. |
 | A proxy teammate has been quiet for a long time | **Never guess from elapsed time — there is no expected duration, engine runs vary from two minutes to over an hour.** Establish the facts instead, in this order: (1) is the engine process alive? `ps -eo pid,etime,command \| grep -E 'codex (exec\|resume)\|grok\|kimi'`; (2) is the output file still growing? compare size and mtime a minute apart; (3) what does the output file already contain? If the process is alive or the file is growing → it is working, wait. If neither → the run has ended: read the output file, then ask the proxy to report. Only if the proxy itself does not answer twice do you shut it down and replace it. |
 | Need best practices mid-session | Dispatch a web researcher (general-purpose with WebSearch). Don't research yourself — protect context. |
 | Risk analysis reveals a CRITICAL confirmed risk requiring architectural change | Adjust the task list based on Tech Lead's recommendations. If the risk requires a fundamentally different approach — re-plan affected tasks and re-validate with Tech Lead. |

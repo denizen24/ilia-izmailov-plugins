@@ -2,14 +2,10 @@
 name: team-research
 description: "Launch Agent Team for parallel deep codebase/topic research — causal understanding, not just coverage. Use this skill whenever the user asks to 'research the codebase', 'understand how X works', 'investigate', 'explore architecture', 'analyze the codebase', 'how does this work', 'deep dive into', 'trace how data flows', or needs thorough multi-angle investigation of code, architecture, or any technical topic. Also use when the user asks a complex question about the codebase that requires reading multiple files across different areas — a single grep won't cut it. Prefer this over ad-hoc exploration when the question spans multiple modules or needs causal understanding (WHY something exists, not just WHAT exists)."
 allowed-tools:
-  - TeamCreate
-  - TeamDelete
   - SendMessage
-  - TaskCreate
-  - TaskGet
-  - TaskUpdate
-  - TaskList
   - Task
+  - TaskStop
+  - Write
   - Read
   - Glob
   - Grep
@@ -67,6 +63,17 @@ complexity = 1 (simple), 2 (medium), 3 (complex)
 
 Specialists and Critic are spawned ONLY on explicit signal. Do not pre-spawn.
 
+## Team Runtime
+
+Current Claude Code has no `TeamCreate` / `TeamDelete` (the team is implicit) and offers
+`TaskCreate` / `TaskList` only to some models. So:
+
+- **No team lifecycle calls.** Teammates are background agents spawned with a `name`.
+- **The angle list is a file**, `.claude/teams/research-<topic-slug>/angles.md`, written by you.
+- **Investigators never message each other.** A message to a teammate whose turn has finished is
+  reported as sent and silently lost. Cross-angle findings go into the report, and you carry them —
+  your own `SendMessage` to an investigator is always delivered, whether it is still working or done.
+
 ## Protocol
 
 ### Phase 1: Plan (5-10 min)
@@ -77,7 +84,7 @@ Specialists and Critic are spawned ONLY on explicit signal. Do not pre-spawn.
    ```
    Task(
      subagent_type="team-research:scout",
-     team_name="research-<topic-slug>",
+     run_in_background=true,
      name="scout",
      prompt="RESEARCH QUESTION: [question]
    Quick-scan the landscape and send findings to lead."
@@ -92,14 +99,11 @@ Specialists and Critic are spawned ONLY on explicit signal. Do not pre-spawn.
    - **Depth tier** per angle: shallow (structure mapping) or deep (causal understanding)
    - **Team size**: Use the formula above
 
-3. **Create team:**
-   ```
-   TeamCreate(team_name="research-<topic-slug>")
-   ```
+3. **Pick the run name** `research-<topic-slug>`. There is no team to create — the team is implicit.
 
-4. **Create tasks** (one per angle) via TaskCreate:
-   - Clear subject describing the angle
-   - Description with: what to investigate, where to start, explanation-based stop criteria, depth tier
+4. **Write the angle list** to `.claude/teams/research-<topic-slug>/angles.md` — one section per angle:
+   - `## investigator-<angle>` — the teammate name
+   - What to investigate, where to start, explanation-based stop criteria, depth tier
 
 ### Phase 2: Investigate (bulk of time)
 
@@ -107,20 +111,21 @@ Specialists and Critic are spawned ONLY on explicit signal. Do not pre-spawn.
    ```
    Task(
      subagent_type="team-research:investigator",
-     team_name="research-<topic-slug>",
+     run_in_background=true,
      name="investigator-<angle>",
      prompt="RESEARCH QUESTION: [the full question]
    YOUR ANGLE: [specific angle description]
    DEPTH TIER: [shallow/deep]
    START FROM: [file/dir entry point]
    STOP WHEN: [explanation-based stop criteria for this angle]
+   ALL ANGLES: .claude/teams/research-<topic-slug>/angles.md
 
-   Claim your task from the task list. Send findings to lead when done."
+   Your final reply is your report — it reaches lead when your turn ends."
    )
    ```
 
 2. **While investigators work:**
-   - If an investigator discovers something relevant to another angle → encourage cross-communication
+   - If an investigator's report touches another angle (its "Connections to Other Angles" section) → forward that part yourself: `SendMessage(to="investigator-<other>")`. Investigators do not message each other.
    - If an investigator gets stuck → give hints about where to look
    - If angles turn out to overlap → redirect to avoid duplication
    - If an ESCALATE signal arrives → note it for Phase 3
@@ -152,7 +157,7 @@ Spawn a **Challenger agent:**
 ```
 Task(
   subagent_type="team-research:research-challenger",
-  team_name="research-<topic-slug>",
+  run_in_background=true,
   name="challenger",
   prompt="RESEARCH QUESTION: [the full question]
 
@@ -174,7 +179,7 @@ Stress-test these findings and send your assessment to lead."
    ```
    Task(
      subagent_type="team-research:critic",
-     team_name="research-<topic-slug>",
+     run_in_background=true,
      name="critic",
      prompt="FLAGGED AREAS: [What Challenger flagged as insufficient]
 
@@ -193,7 +198,7 @@ Stress-test these findings and send your assessment to lead."
 ```
 Task(
   subagent_type="team-research:specialist",
-  team_name="research-<topic-slug>",
+  run_in_background=true,
   name="specialist-<domain>",
   prompt="DOMAIN: [domain]
 CONTEXT: Investigator [name] found [what] in [file:line].
@@ -311,14 +316,13 @@ Present both sides with source tags — let the reader decide.]
 Include source tags for each recommendation's evidence base.]
 ```
 
-2. Shut down all team members
-3. TeamDelete to clean up
-4. Present report to user
+2. Stop any teammate still running (`TaskStop`). Finished teammates need nothing — there is no team to delete
+3. Present report to user
 
 ## Key Rules
 
 - **Depth > Coverage** — 3 well-explained findings beat 10 surface observations
-- **Investigators can talk to each other** — encourage cross-pollination
+- **Investigators do not talk to each other** — they write cross-angle notes into their reports, and you carry them
 - **You are the synthesizer and cross-pollinator** — find connections investigators can't see alone
 - **Preserve Source Tags** — Observed/Inferred/Hypothesized must appear in the final report
 - **Preserve file:line references** — these are the evidence, don't lose them
