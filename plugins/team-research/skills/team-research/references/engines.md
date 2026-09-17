@@ -80,8 +80,8 @@ Every external role here is **read-only**. None of them may be given a write mod
 
 At the spawn point of an external role, **do not call `Task()`**. Instead:
 
-1. **Write the prompt to a file first** — with Bash (`cat > … <<'EOF'`), since this skill has no Write
-   tool. **`mkdir -p` the directory in the same Bash call** — the heredoc does not create it, and the
+1. **Write the prompt to a file first** — with Bash (`cat > … <<'EOF'`), so the directory can be
+   created in the same call. **`mkdir -p` the directory in the same Bash call** — the heredoc does not create it, and the
    scout runs before anything has been written into the run directory, so it may not exist yet.
    Path: `.claude/teams/research-<topic-slug>/engine/<role>-<n>.prompt.md`. Content, in order:
    - the orchestrator line from "Role Brief" below;
@@ -123,8 +123,8 @@ The engine gets **the same instructions the Claude agent would have** — never 
 - **Keep verbatim:** the whole body of `agents/<role>.md`, and the `<example>` blocks from the
   frontmatter `description` — they are the role's calibration.
 - **Drop:** the frontmatter keys `name`, `model`, `color`, `tools`.
-- **Translate:** "send findings to lead" / "mark task complete" → "return your findings as the reply";
-  drop `TaskUpdate` / `TaskList` mechanics.
+- **Translate:** "send findings to lead" / "end your turn with the findings as your final reply" →
+  "return your findings as the reply"; drop any `SendMessage` / `TO:` / `FROM:` mechanics.
 
 Start the file with:
 
