@@ -96,8 +96,11 @@ file is what makes the run recoverable afterwards.
 For Grok, mint the session UUID (`uuidgen`) and write it to `session.txt` **now**, before the call —
 you are the one choosing it, so there is no reason to wait.
 
-Then run the engine's `cmd` with `{prompt}` = `"$(cat <path>)"`, `{sandbox}` = `read-only` for every
-role except `coder` and `risk-tester` (those get `workspace-write`). Redirect output to
+Then run the engine's `cmd` with the placeholders filled as `engines.md` defines them ("Built-in
+Engine Presets" → Placeholders): `{prompt}` = `"$(cat <path>)"`, `{prompt_file}` = `<path>` for
+presets that read the file themselves (`cursor`), `{sandbox}` = `read-only` for every role except
+`coder` and `risk-tester` (those get `workspace-write`), and `{mode_flags}` = the preset's `mode` flags
+for that same access. Redirect output to
 `NNN.out.txt` inside the command itself (`> NNN.out.txt 2>&1`) so the result exists on disk even if
 you never see it.
 
@@ -114,9 +117,27 @@ ENGINE RUNNING: {role} on {engine}, started {HH:MM}
   output: .claude/teams/{team-name}/engine/{role}/{NNN}.out.txt
 ```
 
-Then, for Codex and Kimi, extract the session id from the output as soon as it appears and write it
-to `session.txt`. Do not wait for the run to finish — the id is printed at the start, and without it
-the whole conversation is unreachable.
+Then get the session id into `session.txt` — how depends on the engine, and there are three ways:
+
+| Engine | Where the id comes from | When you can write it |
+|--------|-------------------------|-----------------------|
+| `grok` | you minted it (`uuidgen`) | already written, before the call |
+| `codex`, `kimi` | a line in the output (`session id: <uuid>` / `kimi -r session_…`) | as soon as it appears — do not wait for the run to finish |
+| `cursor` | the `session_id` field of the JSON reply | when the call returns: `--output-format json` prints one object at the end |
+
+Without `session.txt` the next round has nothing to `resume`, and the role silently forgets every
+earlier round — which is most of the value of keeping one session per role. For Cursor, read the id
+from the JSON object rather than grepping free text; the out file also carries stderr (`2>&1`), so
+take the last line that parses:
+
+```bash
+python3 -c 'import json,sys
+for line in reversed(open(sys.argv[1]).read().splitlines()):
+    try: print(json.loads(line)["session_id"]); break
+    except (ValueError, KeyError, TypeError): pass' NNN.out.txt > session.txt
+```
+
+An empty `session.txt` after a zero exit means the reply was not JSON — treat it as a failed call.
 
 **As soon as you have the session id, append one line to the run ledger**
 `.claude/teams/{team-name}/ledger.jsonl` (append with `>>`, never rewrite the file):
