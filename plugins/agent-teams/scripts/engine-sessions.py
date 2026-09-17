@@ -3,11 +3,11 @@
 
 The ledger (.claude/teams/<team>/ledger.jsonl) is the fast path: it maps role -> session.
 This script is the fallback for when the ledger is missing or incomplete — it rebuilds the
-map from what codex/kimi/grok record on their own, with no cooperation from any agent.
+map from what codex/kimi/grok/cursor record on their own, with no cooperation from any agent.
 
   engine-sessions.py [project_dir] [--since HH:MM] [--json]
 """
-import argparse, json, os, sys
+import argparse, hashlib, json, os, sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote
@@ -72,6 +72,37 @@ def grok_sessions(project: Path):
         }
 
 
+def cursor_sessions(project: Path):
+    # Cursor Agent CLI keeps one directory per working directory, named by the md5 of its path, and
+    # one subdirectory per session, named by the session id. meta.json repeats the cwd, so the match
+    # is checked rather than trusted to the hash. The readable transcript lives elsewhere:
+    # ~/.cursor/projects/<cwd with slashes as dashes>/agent-transcripts/<id>/ (the name is shortened
+    # for long paths, so it is looked up by session id, not rebuilt from the path).
+    root = HOME / ".cursor" / "chats" / hashlib.md5(str(project).encode()).hexdigest()
+    if not root.exists():
+        return
+    transcripts = HOME / ".cursor" / "projects"
+    for d in sorted((p for p in root.iterdir() if p.is_dir()),
+                    key=lambda p: p.stat().st_mtime, reverse=True):
+        try:
+            meta = json.loads((d / "meta.json").read_text())
+        except Exception:
+            continue
+        if Path(meta.get("cwd", "")) != project:
+            continue
+        created = meta.get("createdAtMs")
+        started = (datetime.fromtimestamp(created / 1000, tz=timezone.utc).isoformat(timespec="seconds")
+                   if isinstance(created, (int, float)) else "")
+        found = next(iter(transcripts.glob(f"*/agent-transcripts/{d.name}")), None) if transcripts.exists() else None
+        yield {
+            "engine": "cursor",
+            "session": d.name,
+            "started": started,
+            "path": str(found or d),
+            "resume": f"cursor-agent -p --trust --output-format json --resume {d.name} \"...\"",
+        }
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("project", nargs="?", default=os.getcwd())
@@ -80,7 +111,8 @@ def main():
     a = ap.parse_args()
 
     project = Path(a.project).resolve()
-    rows = list(codex_sessions(project)) + list(kimi_sessions(project)) + list(grok_sessions(project))
+    rows = (list(codex_sessions(project)) + list(kimi_sessions(project)) + list(grok_sessions(project))
+            + list(cursor_sessions(project)))
 
     if a.since:
         h, m = (int(x) for x in a.since.split(":"))

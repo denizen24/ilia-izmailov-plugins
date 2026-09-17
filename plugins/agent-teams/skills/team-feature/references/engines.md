@@ -88,7 +88,7 @@ Any role not listed = `claude`.
 |-----|---------|---------|
 | `enabled` | Global kill switch. `false` → everything on Claude regardless of `roles`. | `true` |
 | `fallback` | What happens when an assigned CLI is missing or fails: `"claude"` (silent fallback) or `"fail"` (stop the run). | `"claude"` |
-| `roles.<id>` | Engine name string, or object `{ engine, model?, effort?, sandbox? }`. | `"claude"` |
+| `roles.<id>` | Engine name string, or object `{ engine, model?, effort?, sandbox? }`. `sandbox` is the role's access (`read-only` / `workspace-write`); engines without a sandbox flag map it through their preset — `cursor` turns it into its `mode` flags. | `"claude"` |
 | `engines.<name>` | Override the built-in preset (model, effort, or the full `cmd`/`resume` templates). | built-in presets below |
 
 **CLI flag `--engines=off`** on the skill invocation forces every role to `claude` for that run
@@ -101,8 +101,14 @@ Any role not listed = `claude`.
 These ship with the plugin. Users only override them when a CLI changes its flags.
 
 Flags, models and session mechanics below were smoke-tested against codex-cli 0.146.0, kimi-code/k3
-and grok-4.6 (2026-08-17) and Cursor Agent CLI 2026.09.02 (2026-09-08): each engine answered a
-prompt and correctly recalled it after a resume.
+and grok-4.6 (2026-08-17) and Cursor Agent CLI 2026.09.02 (2026-09-08, re-run against 2026.09.10 on
+2026-09-17): each engine answered a prompt and correctly recalled it after a resume.
+
+**Placeholders.** `{prompt}` = `"$(cat <prompt file>)"`; `{prompt_file}` = the path itself, for
+presets that interpolate the file on their own (`cursor`); `{sandbox}` = `read-only` or
+`workspace-write` by the role's need (`coder`, `risk-tester` write, everything else reads);
+`{mode_flags}` = the `mode` line of the preset for that same need; `{model}`, `{effort}` = the role
+override or the preset default; `{session}` = the saved session id.
 **Re-verify after CLI upgrades** — model names and resume flags do change.
 
 **Judging success:** use the process exit code and whether a model reply is present. Do NOT treat
@@ -161,16 +167,18 @@ fails to start (observed in a live run on 2026-08-17).
 ### cursor
 
 ```
-cmd:     agent -p --trust --output-format json --model {model} {mode_flags} "$(cat {prompt_file})"
-resume:  agent -p --trust --output-format json --model {model} {mode_flags} --resume {session} "$(cat {prompt_file})"
+cmd:     cursor-agent -p --trust --output-format json --model {model} {mode_flags} "$(cat {prompt_file})"
+resume:  cursor-agent -p --trust --output-format json --model {model} {mode_flags} --resume {session} "$(cat {prompt_file})"
 model:   cursor-grok-4.6-xhigh
-mode:    read → --mode ask, write → --sandbox enabled -f
-session: extract from the JSON reply, field `"session_id": "<uuid>"`
+mode:    read-only → --mode ask, workspace-write → --sandbox enabled -f
+session: extract from the JSON reply, field `"session_id": "<uuid>"` — it arrives with the reply, at the end
 result:  the `result` field of the same JSON
 ```
 
-Cursor Agent CLI (`agent`, also installed as `cursor-agent`; smoke-tested against 2026.09.02).
-Runs on a Cursor subscription — no separate token bill.
+Cursor Agent CLI, called as **`cursor-agent`**. It also installs an `agent` alias, but do not use
+it: the Grok installer symlinks `agent` to Grok's own binary, so on a machine with both CLIs
+`command -v agent` succeeds and the run launches Grok with Cursor's flags — failing on `--trust` with
+an error that has nothing to do with Cursor. Runs on a Cursor subscription — no separate token bill.
 
 `--trust` is MANDATORY — without it the CLI stops on the "do you trust this folder?" question in
 non-interactive mode and does nothing.
@@ -180,16 +188,18 @@ no file appeared. That makes `cursor` safe for read-only roles without relying o
 For write-capable roles (`risk-tester`) use `--sandbox enabled -f`.
 
 **Sessions:** Cursor prints the id itself, in the `session_id` field of the JSON reply — read it
-from there rather than minting your own (unlike Grok). Verified: a second call with `--resume`
-recalled a word from the first, at 354 input tokens against 17 536 from cache.
+from there rather than minting your own (unlike Grok). `--output-format json` prints one object when
+the run ends, so the id is known only when the call returns — write `session.txt` and the ledger
+`launch` line right then. Verified: a second call with `--resume` recalled a word from the first
+(354 input tokens against 17 536 from cache; re-verified 2026-09-17 against 2026.09.10).
 
 **Prompt through a file.** Role briefs contain quotes, backticks and newlines; passing them inline
 loses to shell quoting. Write the brief to a file and interpolate `"$(cat {prompt_file})"`.
 
 **Binary path.** Installs to `~/.local/bin` (a symlink into `~/.local/share/cursor-agent/versions/`).
-If the shell cannot find `agent`, prefix the call with `PATH="$HOME/.local/bin:$PATH"`.
+If the shell cannot find `cursor-agent`, prefix the call with `PATH="$HOME/.local/bin:$PATH"`.
 
-**Model choice.** `agent --list-models` lists what the subscription allows. Do NOT route roles to
+**Model choice.** `cursor-agent --list-models` lists what the subscription allows. Do NOT route roles to
 Claude models through Cursor — you already have that subscription, and the point of offloading is a
 *different* blind spot, not the same model twice. Useful picks: `cursor-grok-4.6-xhigh` for
 adversarial reading (security review, "what if"), `gpt-5.3-codex-xhigh` where the role must write
@@ -207,8 +217,9 @@ Run this before Phase 1 Step 1. It is cheap and must not be skipped when the con
    plus one warning line to the user.
 2. **Honor kill switches.** `--engines=off` or `"enabled": false` → all-`claude`, skip the rest.
 3. **Probe the CLIs actually referenced.** One Bash call:
-   `command -v codex kimi grok` (only the names that appear in `roles`).
-   Any missing name → those roles fall back per `fallback`.
+   `command -v codex kimi grok cursor-agent` — only the binaries of engines that appear in
+   `roles` (the `cursor` engine's binary is `cursor-agent`, never `agent`; see its preset).
+   Any missing binary → those roles fall back per `fallback`.
 4. **Build the engine table** — role ID → engine — and keep it for the whole run. Write it into
    `.claude/teams/{team-name}/state.md` under `## Engines` so it survives compaction.
    Role IDs that are not in the Role Registry belong to other plugins sharing this file
@@ -236,8 +247,9 @@ Replaces a `Task()` spawn for one-shot roles. The spawner (usually Lead) does th
    not.
 2. **Run the CLI** via Bash, redirecting output to a file so it exists even if the caller loses it:
    `... > .claude/teams/{team}/engine/{role}-{n}.out.md 2>&1`.
-   Substitute `{prompt}` with `$(cat <path>)` and `{sandbox}` with the role's need
-   (`risk-tester` → write, everything else → read).
+   Fill the placeholders as described under "Built-in Engine Presets" — `{prompt}` / `{prompt_file}`
+   from the prompt file, `{sandbox}` / `{mode_flags}` from the role's need (`risk-tester` → write,
+   everything else → read).
 
    **Always `run_in_background: true` for `coder` and `risk-tester`** — they routinely run longer
    than the 10-minute Bash ceiling, and a foreground call that hits the ceiling loses the result
@@ -355,7 +367,9 @@ run produces confusing results, check the assignment against this list first.
 
 **Every engine already records itself.** Codex writes the full conversation to
 `~/.codex/sessions/YYYY/MM/DD/rollout-<time>-<id>.jsonl`, Kimi to `~/.kimi-code/sessions/` with an
-index at `session_index.jsonl`, Grok to `~/.grok/sessions/<url-encoded-cwd>/<session-uuid>/`. Claude
+index at `session_index.jsonl`, Grok to `~/.grok/sessions/<url-encoded-cwd>/<session-uuid>/`, Cursor to
+`~/.cursor/chats/<md5 of cwd>/<session-uuid>/` (with `meta.json` naming the `cwd`) and a readable
+transcript in `~/.cursor/projects/<cwd, slashes as dashes>/agent-transcripts/<session-uuid>/`. Claude
 Code likewise records every agent and every message it sends. None of this needs an agent's
 cooperation, and none of it can be forgotten.
 
@@ -394,7 +408,7 @@ An agent that dies before writing its line loses nothing that matters: run
 python3 {plugin}/scripts/engine-sessions.py <project-dir> --since HH:MM
 ```
 
-It scans all three engines' own session stores, filters by working directory, and prints each
+It scans all four engines' own session stores, filters by working directory, and prints each
 session's id, start time, record path and a ready `resume` command. This is the mechanical fallback
 that makes ledger discipline non-critical — the map can always be rebuilt from disk.
 
