@@ -17,21 +17,21 @@ Canonical role IDs. These are the keys usable in the config `roles` block.
 | Role ID | Kind | Spawned at | Engine options |
 |---------|------|-----------|----------------|
 | `lead` | orchestrator | skill entry | **claude only** (owns team, tasks, user dialogue) |
-| `codebase-researcher` | one-shot | Phase 1 Step 2 | claude, codex, kimi, grok |
-| `reference-researcher` | one-shot | Phase 1 Step 2 | claude, codex, kimi, grok |
+| `codebase-researcher` | one-shot | Phase 1 Step 2 | claude, codex, kimi, grok, cursor |
+| `reference-researcher` | one-shot | Phase 1 Step 2 | claude, codex, kimi, grok, cursor |
 | `web-researcher` | one-shot | Phase 1 Step 2 | claude, grok (live search) |
-| `risk-tester` | one-shot | Phase 1 Step 4b | claude, codex |
-| `ci-verifier` | one-shot | Phase 3 Step 5c | claude, codex |
-| `spec-verifier` | one-shot | Phase 3 Step 5c | claude, codex |
+| `risk-tester` | one-shot | Phase 1 Step 4b | claude, codex, cursor |
+| `ci-verifier` | one-shot | Phase 3 Step 5c | claude, codex, cursor |
+| `spec-verifier` | one-shot | Phase 3 Step 5c | claude, codex, cursor |
 | `browser-verifier` | one-shot | Phase 3 Step 5c | **claude only** (needs Chrome MCP) |
-| `legacy-scanner` | one-shot | Phase 3 Step 6 | claude, codex |
-| `tech-lead` | teammate | Phase 1 Step 4b (MEDIUM) | claude, codex, kimi, grok |
-| `architect` | teammate | Phase 1 Step 4c (COMPLEX) | claude, codex, kimi, grok |
+| `legacy-scanner` | one-shot | Phase 3 Step 6 | claude, codex, cursor |
+| `tech-lead` | teammate | Phase 1 Step 4b (MEDIUM) | claude, codex, kimi, grok, cursor |
+| `architect` | teammate | Phase 1 Step 4c (COMPLEX) | claude, codex, kimi, grok, cursor |
 | `architect-frontend` / `architect-backend` / `architect-systems` | teammate | Phase 1 Step 4c | per-persona override of `architect` |
-| `security-reviewer` | teammate | Phase 1 Step 5 | claude, codex, kimi, grok |
-| `logic-reviewer` | teammate | Phase 1 Step 5 | claude, codex, kimi, grok |
-| `quality-reviewer` | teammate | Phase 1 Step 5 | claude, codex |
-| `unified-reviewer` | teammate | Phase 1 Step 5 (SIMPLE) | claude, codex, kimi |
+| `security-reviewer` | teammate | Phase 1 Step 5 | claude, codex, kimi, grok, cursor |
+| `logic-reviewer` | teammate | Phase 1 Step 5 | claude, codex, kimi, grok, cursor |
+| `quality-reviewer` | teammate | Phase 1 Step 5 | claude, codex, cursor |
+| `unified-reviewer` | teammate | Phase 1 Step 5 (SIMPLE) | claude, codex, kimi, cursor |
 | `coder` | teammate | Phase 1 Step 5, Phase 2 | claude, codex **(experimental)** |
 
 **Kind determines the mechanic:**

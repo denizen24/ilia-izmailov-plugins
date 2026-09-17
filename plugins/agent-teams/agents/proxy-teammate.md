@@ -1,7 +1,7 @@
 ---
 name: proxy-teammate
 description: |
-  Thin team member that carries a role (reviewer, tech-lead, architect, coder) inside the Claude team while delegating the actual thinking to an external CLI agent (Codex, Kimi, Grok). Keeps one external session alive per role so follow-up rounds remember earlier ones, triages the external output before relaying it, and speaks the normal team protocol so other teammates see no difference.
+  Thin team member that carries a role (reviewer, tech-lead, architect, coder) inside the Claude team while delegating the actual thinking to an external CLI agent (Codex, Kimi, Grok, Cursor). Keeps one external session alive per role so follow-up rounds remember earlier ones, triages the external output before relaying it, and speaks the normal team protocol so other teammates see no difference.
 
   <example>
   Context: Config assigns security-reviewer to codex; coder requests a review
