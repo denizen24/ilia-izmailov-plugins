@@ -199,6 +199,8 @@ instead of a message; everything after this point is unchanged.
    Analyze failure modes for these areas and send findings to lead."
    )
    ```
+   `critic` on an external engine → the same prompt, with the flagged areas pasted into the prompt
+   file, through `references/engines.md`, no `Task()`.
 4. **If ESCALATE flags exist:** spawn specialist agents (max 2, prioritize by severity)
 
 **Rules:**
@@ -222,6 +224,9 @@ Send findings to lead, then mark your task complete.
 Keep it focused — don't expand beyond the flagged area."
 )
 ```
+
+`specialist` on an external engine → the same prompt, with the ESCALATE details pasted into the
+prompt file, through `references/engines.md`, no `Task()`.
 
 <!-- report-format-contract -->
 ### Output format: the "now → after" table
