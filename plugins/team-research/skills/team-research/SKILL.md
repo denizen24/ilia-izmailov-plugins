@@ -74,7 +74,8 @@ A role can run on another model through an external CLI (Codex, Kimi, Grok, Curs
 skip this section**: every role is Claude and nothing below changes.
 
 - **Before Phase 1:** resolve the engine table — `references/engines.md`, "Resolve Engines".
-- **At every spawn of `scout`, `research-challenger`, `critic` or `specialist`:** check the table. An
+- **At every spawn of `research-scout`, `research-challenger`, `research-critic` or
+  `research-specialist`** (the config IDs of the scout, challenger, critic and specialist): check the table. An
   external engine means no `Task()` — run the delegated one-shot from `references/engines.md` with the
   same prompt text shown below, and read its report as that agent's message to you.
 - `lead` and `investigator` always run on Claude.
@@ -96,7 +97,7 @@ skip this section**: every role is Claude and nothing below changes.
    Quick-scan the landscape and send findings to lead."
    )
    ```
-   `scout` on an external engine → the same prompt through `references/engines.md`, no `Task()`.
+   `research-scout` on an external engine → the same prompt through `references/engines.md`, no `Task()`.
 
 2. **Based on Scout's report, define:**
    - **Angles** (3-7): independent, non-overlapping (MECE)
@@ -199,7 +200,7 @@ instead of a message; everything after this point is unchanged.
    Analyze failure modes for these areas and send findings to lead."
    )
    ```
-   `critic` on an external engine → the same prompt, with the flagged areas pasted into the prompt
+   `research-critic` on an external engine → the same prompt, with the flagged areas pasted into the prompt
    file, through `references/engines.md`, no `Task()`.
 4. **If ESCALATE flags exist:** spawn specialist agents (max 2, prioritize by severity)
 
@@ -225,7 +226,7 @@ Keep it focused — don't expand beyond the flagged area."
 )
 ```
 
-`specialist` on an external engine → the same prompt, with the ESCALATE details pasted into the
+`research-specialist` on an external engine → the same prompt, with the ESCALATE details pasted into the
 prompt file, through `references/engines.md`, no `Task()`.
 
 <!-- report-format-contract -->

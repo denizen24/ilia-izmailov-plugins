@@ -51,12 +51,15 @@ Any other assignment for `live-drift-checker` is ignored with one warning line. 
    line.
 2. **Kill switch.** `"enabled": false`, or `--engines=off` in the user's invocation → all Claude,
    stop here.
-3. **Probe only the CLIs this plugin's roles reference** — one Bash call, e.g. `command -v agent codex`
-   (the `cursor` engine's binary is `agent`; add `PATH="$HOME/.local/bin:$PATH"` if it is not found).
+3. **Probe only the CLIs this plugin's roles reference** — one Bash call, e.g.
+   `command -v cursor-agent codex` (the `cursor` engine's binary is `cursor-agent`, never `agent` — see
+   its preset; add `PATH="$HOME/.local/bin:$PATH"` if it is not found).
    Missing binary → that role falls back per `fallback`.
 4. **Keep the table** — role ID → engine and model — for the whole run.
 5. 📢 **Print one line** only if a role is non-Claude:
    `⚙️ Движки: rollback-critic → cursor/cursor-grok-4.6-xhigh (остальные — Claude)`
+   If any role resolved to `kimi`, append its disclosure to the same line:
+   `⚙️ kimi без sandbox-флага — граница «только чтение» держится инструкцией.`
 
 ---
 
@@ -75,9 +78,16 @@ At the spawn point of an external role, **do not call `Task()`**. Instead:
    - the Output Contract below.
 
    Pass paths for repository files — the engine runs in the project directory and reads them itself.
-2. **Run the CLI** with the preset below, foreground, `timeout: 600000`, output redirected to
-   `.claude/zero-downtime-deploy/engine/<role>-<n>.out.txt`.
-3. **Read the report from the output file** and treat it as that agent's return value.
+2. **Run the CLI** with the preset below, output redirected to
+   `.claude/zero-downtime-deploy/engine/<role>-<n>.out.txt`. The Bash tool stops a foreground call at
+   10 minutes and the result is lost even when the engine finished, so the critic — the heavier role,
+   with the whole scheme and its evidence pasted in — runs with `run_in_background: true`; read its out
+   file when the run completes. `infra-scout` runs foreground with `timeout: 600000`.
+3. **Read the report from the output file** and treat it as that agent's return value. Record where
+   the engine keeps the conversation: append a `launch` line when the session id is known and a
+   `done` / `failed` line at the end to `.claude/zero-downtime-deploy/ledger.jsonl`, in the ledger
+   format of `agent-teams` (`references/engines.md`, "The Ledger"). If the ledger is lost,
+   `agent-teams/scripts/engine-sessions.py <project>` rebuilds the map from the engines' own stores.
 4. **Check citations, not conclusions.**
    - `infra-scout`: a fact whose cited file or line does not exist is dropped. Everything else keeps
      "репозиторий" as its source, exactly as from the Claude scout.
@@ -126,8 +136,8 @@ If the report ends with `ВОПРОС ВЕДУЩЕМУ:`, answer it and `resume`
 
 ## Built-in Presets (read-only form)
 
-The same presets as `agent-teams/skills/team-feature/references/engines.md`, reduced to the read-only
-mode — both external roles here read. `{prompt}` is always `"$(cat <prompt file>)"`. **Re-verify after
+The same presets as `agent-teams/skills/team-feature/references/engines.md` (its `cursor` preset
+arrives with agent-teams 0.10.0), reduced to the read-only mode — both external roles here read. `{prompt}` is always `"$(cat <prompt file>)"`. **Re-verify after
 CLI upgrades**; judge success by the exit code and a present reply, not by stderr noise.
 
 ### codex
@@ -151,8 +161,9 @@ model:   kimi-code/k3
 session: trailing line `To resume this session: kimi -r (session_[0-9a-f-]+)`
 ```
 
-Kimi has no sandbox flag: its read-only boundary is the instruction alone. Prefer another engine for
-`infra-scout` when the repository might hold plain-text secrets.
+Kimi has no sandbox flag, and instructions alone are not a boundary — the same rule `agent-teams`
+applies. Every external role here only reads, so prefer another engine whenever the repository might
+hold plain-text secrets; if `kimi` is chosen anyway, the 📢 line says so.
 
 ### grok
 
@@ -169,15 +180,16 @@ session: NOT printed — mint a real UUID (`uuidgen`) per role before the first 
 ### cursor
 
 ```
-cmd:     agent -p --trust --output-format json --model {model} --mode ask {prompt}
-resume:  agent -p --trust --output-format json --model {model} --mode ask --resume {session} {prompt}
+cmd:     cursor-agent -p --trust --output-format json --model {model} --mode ask {prompt}
+resume:  cursor-agent -p --trust --output-format json --model {model} --mode ask --resume {session} {prompt}
 model:   cursor-grok-4.6-xhigh
-session: the `session_id` field of the JSON reply
+session: the `session_id` field of the JSON reply — the last line of the out file that parses as JSON
 result:  the `result` field of the same JSON
 ```
 
-Cursor Agent CLI (`agent`, also `cursor-agent`). `--trust` is mandatory — without it the CLI stops on
-the folder-trust question and does nothing.
+Cursor Agent CLI, called as **`cursor-agent`** — not `agent`: the Grok installer symlinks `agent` to
+Grok's own binary, and on a machine with both CLIs that name launches Grok with Cursor's flags.
+`--trust` is mandatory — without it the CLI stops on the folder-trust question and does nothing.
 
 `--mode ask` is a real read-only boundary, verified against 2026.09.10 (2026-09-15): it refuses to
 create a file, refuses a shell command that would write one, still runs read-only commands, and its
