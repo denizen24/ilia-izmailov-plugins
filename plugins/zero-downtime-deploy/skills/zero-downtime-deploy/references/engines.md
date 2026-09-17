@@ -49,7 +49,8 @@ Any other assignment for `live-drift-checker` is ignored with one warning line. 
 
 1. **Read the config.** Missing → all Claude, **stop here**. Invalid JSON → all Claude plus one warning
    line.
-2. **Kill switch.** `"enabled": false` → all Claude, stop here.
+2. **Kill switch.** `"enabled": false`, or `--engines=off` in the user's invocation → all Claude,
+   stop here.
 3. **Probe only the CLIs this plugin's roles reference** — one Bash call, e.g. `command -v agent codex`
    (the `cursor` engine's binary is `agent`; add `PATH="$HOME/.local/bin:$PATH"` if it is not found).
    Missing binary → that role falls back per `fallback`.
@@ -63,7 +64,8 @@ Any other assignment for `live-drift-checker` is ignored with one warning line. 
 
 At the spawn point of an external role, **do not call `Task()`**. Instead:
 
-1. **Write the prompt to a file first.** Path: `.claude/zero-downtime-deploy/engine/<role>-<n>.prompt.md`.
+1. **Write the prompt to a file first.** `mkdir -p` the directory before the first write — nothing
+   else creates it. Path: `.claude/zero-downtime-deploy/engine/<role>-<n>.prompt.md`.
    Content, in order:
    - the orchestrator line from "Role Brief" below;
    - the role brief — the body of `agents/<role>.md`, prepared as described below;

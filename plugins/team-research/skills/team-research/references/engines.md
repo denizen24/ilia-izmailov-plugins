@@ -56,13 +56,16 @@ Every external role here is **read-only**. None of them may be given a write mod
 
 1. **Read the config.** Missing → all Claude, **stop here** (zero cost for default users). Invalid JSON
    → all Claude plus one warning line.
-2. **Kill switch.** `"enabled": false` → all Claude, stop here.
+2. **Kill switch.** `"enabled": false`, or `--engines=off` in the user's invocation → all Claude,
+   stop here.
 3. **Probe only the CLIs this plugin's roles reference** — one Bash call, e.g. `command -v codex agent`
    (the `cursor` engine's binary is `agent`; add `PATH="$HOME/.local/bin:$PATH"` if it is not found).
    Missing binary → that role falls back per `fallback`.
 4. **Keep the table** — role ID → engine and model — in your context for the whole run.
 5. 📢 **Print one line** only if a role is non-Claude:
    `⚙️ Движки: research-challenger → cursor/cursor-grok-4.6-xhigh (остальные — Claude)`
+   If any role resolved to `kimi`, append its disclosure to the same line:
+   `⚙️ kimi без sandbox-флага — граница «только чтение» держится инструкцией.`
 
 ---
 
@@ -71,7 +74,9 @@ Every external role here is **read-only**. None of them may be given a write mod
 At the spawn point of an external role, **do not call `Task()`**. Instead:
 
 1. **Write the prompt to a file first** — with Bash (`cat > … <<'EOF'`), since this skill has no Write
-   tool. Path: `.claude/teams/research-<topic-slug>/engine/<role>-<n>.prompt.md`. Content, in order:
+   tool. **`mkdir -p` the directory in the same Bash call** — the heredoc does not create it, and the
+   scout runs before `TeamCreate`, so nothing has made the team directory yet.
+   Path: `.claude/teams/research-<topic-slug>/engine/<role>-<n>.prompt.md`. Content, in order:
    - the orchestrator line from "Role Brief" below;
    - the role brief — the body of `agents/<role>.md`, prepared as described below;
    - **the exact prompt `SKILL.md` shows for this `Task()`**, with the placeholders filled — for the
