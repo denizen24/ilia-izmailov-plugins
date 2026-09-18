@@ -103,17 +103,17 @@ schema, presets, both mechanics, failure handling). No config file → one Read 
 
 - **The team is implicit.** No `TeamCreate` / `TeamDelete`; teammates are background agents spawned with a `name`.
 - **The plan is a file**, `.claude/teams/{team-name}/PLAN.md` — not `TaskCreate`, which current Claude Code offers only to some models.
-- **Every message between teammates goes through Lead.** A message from one teammate to another whose turn has finished is reported as sent and silently lost. Teammates send `TO: <names>` + body to Lead; Lead forwards it verbatim, one `SendMessage` per recipient, without reading code.
+- **Teammates message each other directly; Lead is the fallback.** A message to a teammate that is about to finish its turn can be lost — the tool then answers `queued` instead of `Resuming agent`. On `queued` the sender hands Lead a copy (`QUEUED: <name>`), and Lead delivers it once that teammate is idle. Before going idle with work unfinished, Lead runs the idle check.
 
 ## Roles
 
 | Role | Lifetime | Communicates with | Responsibility |
 |------|----------|-------------------|----------------|
-| **Lead** | Whole session | Everyone; relays every teammate-to-teammate message | Dispatch researchers, plan, spawn team, relay messages, monitor DONE/STUCK in Phase 2, narrate the progress feed to the user |
+| **Lead** | Whole session | Everyone (sparingly); delivers only messages flagged `QUEUED` | Dispatch researchers, plan, spawn team, monitor DONE/STUCK in Phase 2, narrate the progress feed to the user |
 | **Researcher** | One-shot | Lead only | Explore codebase or web, return findings with FULL file content |
-| **Tech Lead** (MEDIUM) | Whole session | Lead (planning) + Coders (escalations only, via Lead relay) | Validate plan, risks, rule on escalations, DECISIONS.md, final cross-task check. Does not review tasks |
-| **Coder** | Per task | Reviewer (via Lead relay), Lead (DONE/STUCK) | Implement, self-check, request review, fix feedback, commit |
-| **Unified Reviewer** | Whole session (rotated) | Coder only (via Lead relay) | The one per-task review at every level: security, logic, fit with plan, quality |
+| **Tech Lead** (MEDIUM) | Whole session | Lead (planning) + Coders (escalations only, directly) | Validate plan, risks, rule on escalations, DECISIONS.md, final cross-task check. Does not review tasks |
+| **Coder** | Per task | Reviewer (directly), Lead (DONE/STUCK) | Implement, self-check, request review, fix feedback, commit |
+| **Unified Reviewer** | Whole session (rotated) | Coder only (directly) | The one per-task review at every level: security, logic, fit with plan, quality |
 | **Architect** (COMPLEX) | Debate only | Lead (round files carry the argument between architects) | Debate the spec, then write a domain review brief and stand down — all three, Primary included. Review goes to the reviewer, decisions to Lead, the final consistency check to a one-shot agent. |
 
 ## Review Model — One Reviewer per Task, Global Checks at the End
@@ -175,9 +175,9 @@ Execute these steps in order:
 
 > **Full details:** `references/phase2-monitoring.md`
 
-**Lead's role is MINIMAL in coordination — but not silent.** Coders drive their own review loop with the reviewer (and tech-lead for escalations on MEDIUM); Lead carries their messages. Lead only:
+**Lead's role is MINIMAL in coordination — but not silent.** Coders drive their own review loop with the reviewer (and tech-lead for escalations on MEDIUM); they message each other directly, and Lead delivers only `QUEUED` copies. Lead only:
 
-- Relays every `TO:` message verbatim to the named teammates (`references/team-runtime.md` §3)
+- Delivers every `QUEUED:` copy once its recipient is idle, and runs the idle check before going idle with work unfinished (`references/team-runtime.md` §3)
 
 - Prints a progress feed line for every meaningful event (see Progress Feed table in `phase2-monitoring.md`)
 - Tracks progress: task statuses in PLAN.md; roster, rotations and escalations in state.md
@@ -187,9 +187,9 @@ Execute these steps in order:
 - Detects a stalled teammate from the run ledger and the engine process — never by polling on a timer — and replaces it with a fresh finisher instead of doing the work itself
 - Transitions to Phase 3 when ALL coding tasks complete
 
-**Lead does NOT:** read code, review code, run tests, pick reviewers, wait for verdicts, or edit, summarise or judge the messages it relays.
+**Lead does NOT:** read code, review code, run tests, pick reviewers, wait for verdicts, or edit, summarise or judge the messages it delivers.
 
-**Compaction recovery:** If context is lost, read `.claude/teams/{team-name}/state.md` and `PLAN.md` — together they contain the current phase, team roster, task statuses, and executable instructions for what to do next.
+**Compaction recovery:** If context is lost, read `.claude/teams/{team-name}/state.md`, `PLAN.md` and `pending.log` (deliver every `OPEN` line) — together they contain the current phase, team roster, task statuses, and executable instructions for what to do next.
 
 <!-- report-format-contract -->
 ### Output format: the "now → after" table
@@ -259,7 +259,7 @@ Per-run artifacts live in `.claude/teams/{team-name}/`:
 | `reports/` | Review findings, architect debate rounds, researcher / risk / verifier reports | Reviewers, architects, Lead |
 | `engine/` | Prompts, session ids and raw output of external CLI runs | Proxy teammates, Lead |
 | `ledger.jsonl` | One line per external engine run: role, task, session id, outcome. **The address of the engine's own recording** — Codex, Kimi, Grok and Cursor each keep the full conversation themselves, so this is what makes theirs findable and resumable. Rebuildable with `scripts/engine-sessions.py` | Whoever launches the run |
-| root | `PLAN.md` (the task list — Lead only), `state.md`, `relay.log`, `DECISIONS.md`, `VERIFICATION_PLAN.md`, `VERIFICATION_REPORT.md`, `LEGACY_REPORT.md` | Lead, Tech Lead / Primary Architect |
+| root | `PLAN.md` (the task list — Lead only), `state.md`, `pending.log` (copies flagged `QUEUED`), `DECISIONS.md`, `VERIFICATION_PLAN.md`, `VERIFICATION_REPORT.md`, `LEGACY_REPORT.md` | Lead, Tech Lead / Primary Architect |
 
 Rules:
 

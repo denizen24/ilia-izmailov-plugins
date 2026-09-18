@@ -4,6 +4,10 @@
 
 When all coding tasks are completed:
 
+Coders still work in this phase (conventions, fixes, legacy cleanup) and still message the reviewer
+directly: keep delivering `QUEUED` copies and run the idle check before going idle
+(`team-runtime.md` §3).
+
 ## 1. Conventions Update
 
 📢 One line entering Phase 3: `🏁 Code is written. Wrapping up: updating project conventions, then running all checks.`

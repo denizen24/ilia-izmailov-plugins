@@ -297,8 +297,8 @@ session with the engine's `resume` command rather than starting over.
 
 ## Mechanic B: Proxy Teammate
 
-For conversational roles. The team keeps its shape: the coder still sends `TO: unified-reviewer`
-through Lead relay (`team-runtime.md` §3) and gets a normal review back.
+For conversational roles. The team keeps its shape: the coder still messages `unified-reviewer`
+directly (`team-runtime.md` §3) and gets a normal review back.
 
 Spawn `agent-teams:proxy-teammate` with the same `name` the Claude teammate would have had, and a
 prompt containing:
@@ -320,8 +320,9 @@ The proxy's contract is defined in `agents/proxy-teammate.md`. Two rules matter 
 
 If the proxy reports `ENGINE_DOWN: <role>. <reason>` to Lead, Lead applies `fallback` exactly as the
 `ENGINE_DOWN` row in `phase2-monitoring.md` says: `TaskStop` the proxy if still running, spawn the
-normal Claude teammate under the same name, re-forward that name's open requests from `relay.log`
-with `RESEND:`. Coders are not asked to re-send. Print `⚙️ {engine} недоступен — {role} работает на Claude.`
+normal Claude teammate under the same name, let it reply READY (a coder successor gets its task
+instead), then deliver that name's `OPEN` lines from `pending.log`,
+and send a ROSTER UPDATE to coders still waiting on it (phase2-monitoring.md, `ENGINE_DOWN`). Print `⚙️ {engine} недоступен — {role} работает на Claude.`
 
 ---
 
@@ -348,10 +349,10 @@ three mechanical adjustments for things that only exist inside Claude Code.
 
 | Agent file says | Rewrite as |
 |-----------------|------------|
-| "send findings to the coder via SendMessage" | "return findings as your reply — the orchestrator relays them" |
+| "send findings to the coder via SendMessage" | "return findings as your reply — the orchestrator passes them on" |
 | "message tech-lead / Lead / another teammate" | "end your reply with `ESCALATE TO {recipient}: <message>`" |
 | "you are READ-ONLY, never use Write or Edit" | keep the sentence AND enforce it with `--sandbox read-only` — instructions alone are not a boundary |
-| relay mechanics: `SendMessage(to="main")`, `TO:` / `FROM:` lines, "end your turn while waiting" | "return it as your reply" — the proxy adds the `TO:` line and does the relaying |
+| messaging mechanics: `SendMessage`, `QUEUED:` / `RESEND:`, "end your turn while waiting" | "return it as your reply" — the proxy does the messaging |
 | references to PLAN.md status updates / team roster mechanics | drop; Lead owns task state (PLAN.md), the proxy owns the conversation |
 
 State this translation explicitly at the top of the brief so the engine knows why messaging verbs
