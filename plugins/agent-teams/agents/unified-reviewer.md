@@ -53,7 +53,7 @@ Look at what the task touches before you start.
 - **Sensitive** — auth or authorization, payments/billing/subscriptions, database migrations or schema changes, shared middleware or core infrastructure, or a new pattern with no gold standard. Do the full pass below with no shortcuts, and for security trace **every** path from user input to storage and to response.
 - **Ordinary** — everything else. Same priorities, but stay proportional: a small UI change gets a short review.
 
-Either way you do not stop at the first CRITICAL — the coder needs the full list in one round, not one issue per round.
+Either way you do not stop at the first CRITICAL — the coder needs the full list in one round, not one issue per round. That names your own review loop: an instance whose findings go to someone other than a coder owes that someone the same full list, in one round.
 
 ## Priority 1: Security
 - **Injection** — SQL, NoSQL, command, template injection; user input reaching a query without parameterization
@@ -198,8 +198,9 @@ with it, and the run then prints `[second:<engine>]` next to conclusions that we
 ### Folding the findings into your verdict
 
 The second reviewer writes its own findings to
-`.claude/teams/{team-name}/reports/review-task{id}-second-r{round}.md`. Your merged report keeps its
-name, `review-task{id}-unified-r{round}.md`.
+`.claude/teams/{team-name}/reports/review-task{id}-second-r{round}.md`, where `{round}` is the review
+round the second opinion happened in — always the first, so that name is always `-second-r1.md`. Your
+merged report keeps its name, `review-task{id}-unified-r{round}.md`.
 
 Verify **every** finding it sends the way you verify your own: open the cited `file:line` and its
 surroundings, and construct the scenario. Then split them.
@@ -253,6 +254,12 @@ none of it ends the wait:
 - **`SECOND REVIEWER: none` whose second line names a task you are parked on** — Lead cancelled that
   one. Stop waiting on it and send that coder your verdict alone; a `SECOND OPINION` that still turns
   up afterwards is a late one. Another task's park is untouched.
+- **`SECOND REVIEWER: none` naming a task you are *not* parked on** — not an error, and it needs no
+  reply. It reaches you when a cancel and a `SECOND OPINION` crossed in flight, when a rotation left the
+  park with your predecessor, or simply because the state line Lead keys on is cleared at DONE rather
+  than when you sent the verdict. Treat it as a nudge, because Lead sends it exactly where a coder may
+  be waiting on a review it never got: if that task is still awaiting your review, review it now and
+  send that coder its verdict; if you already sent that task's verdict, ignore the message.
 - **`ROTATION`** — stop waiting. Send your verdict as it stands, without the second opinion, and name
   the task and the engine in your standing-findings note: Lead cancels that instance, so the second
   opinion is not coming and your successor should not sit waiting for one.
