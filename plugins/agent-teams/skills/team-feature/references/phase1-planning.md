@@ -646,7 +646,7 @@ After plan validation (Tech Lead for MEDIUM, Architect debate for COMPLEX), run 
 
 ## Step 5: Spawn Team and Write State File
 
-Spawn everyone NOW — reviewers (or switch architects to review mode), and coders.
+Spawn everyone NOW — the reviewer and the coders.
 
 **Engine check before every spawn in this step.** For any teammate role assigned to an external engine, swap `subagent_type` to `agent-teams:proxy-teammate`, keep `name` and `team_name` identical, and prepend to the prompt below:
 
@@ -660,43 +660,30 @@ SANDBOX: read-only   (coder: workspace-write + explicit allowed-file list)
 --- END ROLE BRIEF ---
 ```
 
-Then the normal prompt text follows unchanged. The roster other teammates see is identical — coders address `security-reviewer` either way.
+Then the normal prompt text follows unchanged. The roster other teammates see is identical — coders address `unified-reviewer` either way.
 
-### 1. Reviewers
+### 1. Reviewer
 
-**For SIMPLE** — spawn unified reviewer:
+One reviewer at every complexity level — `unified-reviewer`. Complexity changes what goes into its
+prompt, not how many reviewers there are.
+
 ```
 Task(subagent_type="agent-teams:unified-reviewer", team_name="feature-<short-name>", name="unified-reviewer",
-  prompt="You are the unified reviewer for team feature-<short-name>.
+  prompt="You are the reviewer for team feature-<short-name> — the only per-task reviewer.
 
 FEATURE CONTEXT:
 Feature: {feature description — what we're building and why}
 Definition of Done: {DoD from Step 3}
 Gold standard references: {list reference files from researcher findings or .conventions/}
-
-Wait for REVIEW requests from coders via SendMessage.
-When reviewing, verify code matches the gold standard patterns and meets the Definition of Done.
-If code touches auth/payments/migrations, send ESCALATE TO MEDIUM to Lead.")
-```
-
-**For MEDIUM** — spawn all 3 reviewers in parallel from one template, {role} = security-reviewer / logic-reviewer / quality-reviewer:
-```
-Task(subagent_type="agent-teams:{role}", team_name="feature-<short-name>", name="{role}",
-  prompt="You are the {security | logic | quality} reviewer for team feature-<short-name>.
-
-FEATURE CONTEXT:
-Feature: {feature description — what we're building and why}
-Definition of Done: {DoD from Step 3}
-Gold standard references: {list reference files from researcher findings or .conventions/}
-Confirmed risks from risk analysis: {CONFIRMED risks from Step 4b relevant to this reviewer's domain}
+Confirmed risks from risk analysis: {CONFIRMED risks from Step 4b — MEDIUM/COMPLEX; omit on SIMPLE}
+DECISIONS.md: .claude/teams/{team-name}/DECISIONS.md — re-read it before each review (if it exists)
 
 Wait for REVIEW requests from coders via SendMessage.
 Pay special attention to the confirmed risks above — verify that code properly addresses their mitigations.")
 ```
 
-For quality-reviewer, omit the confirmed-risks line and the last sentence — instead: "Verify code matches the gold standard patterns and project conventions."
-
-**For COMPLEX** — architects hand over and stand down; fresh reviewers take over code review.
+**For COMPLEX** — architects hand over and stand down first; then the reviewer is spawned with their
+briefs.
 
 Architects are excellent at the debate and terrible value in review, and the reason is mechanical:
 by the time review starts they carry the whole debate transcript, so every review turn costs several
@@ -741,8 +728,7 @@ Its duties are reassigned:
 Only the last one genuinely needs to read code, and a one-shot agent does it with a narrow context
 instead of carrying a debate transcript through the whole run.
 
-**Step 5a-3 — spawn reviewers** exactly as for MEDIUM (see the three `Task(...)` blocks above), with
-the architects' briefs added to each prompt:
+**Step 5a-3 — spawn the reviewer** exactly as above, with the architects' briefs added to its prompt:
 
 ```
 --- REVIEW BRIEFS FROM THE ARCHITECT DEBATE ---
@@ -750,7 +736,7 @@ the architects' briefs added to each prompt:
 --- END BRIEFS ---
 ```
 
-Reviewers start narrow (~90k) and stay narrow, which is the entire point of the swap.
+The reviewer starts narrow (~90k) and stays narrow, which is the entire point of the swap.
 
 ### 2. Coders (up to --coders in parallel, uses `agents/coder.md`)
 
@@ -807,22 +793,20 @@ Claim your first task from the task list and start working."
 
 - **SIMPLE:**
   ```
-  - Reviewers: unified-reviewer
-  - Lead: for DONE/STUCK signals only
+  - Reviewer: unified-reviewer
+  - Lead: DONE/STUCK signals, escalations and review loops
   ```
 - **MEDIUM:**
   ```
-  - Reviewers: security-reviewer, logic-reviewer, quality-reviewer
-  - Tech Lead: tech-lead
+  - Reviewer: unified-reviewer
+  - Tech Lead: tech-lead — escalations and review loops ONLY. Do not send REVIEW requests there.
   - Lead: for DONE/STUCK signals only
   ```
 - **COMPLEX:**
   ```
-  - Reviewers: security-reviewer, logic-reviewer, quality-reviewer
+  - Reviewer: unified-reviewer
     (the architects handed over review briefs and stood down — do NOT message them)
-  - Primary Architect: {primary architect name} — escalations and architectural decisions ONLY,
-    not per-task code review. Do not send REVIEW requests there.
-  - Lead: for DONE/STUCK signals only
+  - Lead: DONE/STUCK signals, escalations and review loops
   ```
   For COMPLEX, also make the DECISIONS.md line unconditional: "Read DECISIONS.md at .claude/teams/{team-name}/DECISIONS.md before starting — it contains the architect debate summary, confirmed risks, and mitigations that affect your implementation."
 
@@ -867,7 +851,7 @@ Your role: listen for DONE/STUCK/ESCALATE from team members.
 ## Phase 3 Instructions (VERIFICATION) — follow step by step when Phase changes
 When you change Phase to VERIFICATION, execute IN ORDER (full details: references/phase3-verification.md):
 1. Conventions task — assign to a coder if unassigned, wait for completion
-2. Final checks — cross-task consistency via Tech Lead / Primary Architect; verify .conventions/ exists
+2. Final checks — cross-task consistency via Tech Lead (MEDIUM) or a one-shot checker (SIMPLE/COMPLEX); verify .conventions/ exists
 3. Prepare verification plan — read VERIFICATION_PLAN.md, update with actual paths/endpoints
 4. Integrated verification — spawn ci-verifier + browser-verifier + spec-verifier in parallel, fix-verify loop for FAIL items (max 3 iterations), save VERIFICATION_REPORT.md
 5. Legacy cleanup — read LEGACY_REPORT.md + Explore scan, AskUserQuestion Delete/Keep/Later per item, cleanup tasks or .legacy-todo.md
@@ -879,20 +863,11 @@ When you change Phase to VERIFICATION, execute IN ORDER (full details: reference
 - fallback policy: {claude | fail}
 
 ## Team Roster
-### SIMPLE/MEDIUM:
-- tech-lead: {ACTIVE | NOT_SPAWNED}
-- security-reviewer: {ACTIVE | NOT_SPAWNED}
-- logic-reviewer: {ACTIVE | NOT_SPAWNED}
-- quality-reviewer: {ACTIVE | NOT_SPAWNED}
-- unified-reviewer: {ACTIVE | NOT_SPAWNED}
-### COMPLEX:
-- architect-frontend: {DEBATING | STOOD_DOWN | ACTIVE if PRIMARY} {PRIMARY if designated}
-- architect-backend: {DEBATING | STOOD_DOWN | ACTIVE if PRIMARY} {PRIMARY if designated}
-- architect-systems: {DEBATING | STOOD_DOWN | ACTIVE if PRIMARY} {PRIMARY if designated}
-- security-reviewer / logic-reviewer / quality-reviewer: {ACTIVE | NOT_SPAWNED}
-  (spawned at Step 5a-3, after the architects handed over)
-- tasks completed since last reviewer rotation: {N} · next to rotate: {role}
-  (rotate one reviewer every 3 completed tasks — see phase2-monitoring.md "Rotating Reviewers")
+- unified-reviewer: {ACTIVE} (on COMPLEX spawned at Step 5a-3, after the architects handed over)
+- tech-lead: {ACTIVE | NOT_SPAWNED} (MEDIUM only)
+- architect-frontend / architect-backend / architect-systems: {DEBATING | STOOD_DOWN} (COMPLEX only)
+- tasks completed since last reviewer rotation: {N}
+  (rotate the reviewer every 3 completed tasks — see phase2-monitoring.md "Rotating the Reviewer")
 
 ## Tasks
 - #{id}: {subject} — {STATUS} ({assignment})
@@ -905,7 +880,7 @@ When you change Phase to VERIFICATION, execute IN ORDER (full details: reference
 After spawning everyone and writing state.md, print one line — composition in human terms, and set the expectation for the ticker:
 
 ```
-👥 Team assembled: 3 architects (now acting as reviewers), 4 coders. Writing code — you'll see a line here for every completed task, decision, and problem.
+👥 Team assembled: 4 coders + a reviewer (the architects handed over their notes). Writing code — you'll see a line here for every completed task, decision, and problem.
 ```
 
-Coders drive their own review process via SendMessage to reviewers and tech-lead. Lead is NOT in the review loop.
+Coders drive their own review process via SendMessage to the reviewer. Lead is NOT in the review loop.

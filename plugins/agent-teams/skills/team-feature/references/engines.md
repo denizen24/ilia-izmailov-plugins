@@ -28,10 +28,7 @@ Canonical role IDs. These are the keys usable in the config `roles` block.
 | `tech-lead` | teammate | Phase 1 Step 4b (MEDIUM) | claude, codex, kimi, grok |
 | `architect` | teammate | Phase 1 Step 4c (COMPLEX) | claude, codex, kimi, grok |
 | `architect-frontend` / `architect-backend` / `architect-systems` | teammate | Phase 1 Step 4c | per-persona override of `architect` |
-| `security-reviewer` | teammate | Phase 1 Step 5 | claude, codex, kimi, grok |
-| `logic-reviewer` | teammate | Phase 1 Step 5 | claude, codex, kimi, grok |
-| `quality-reviewer` | teammate | Phase 1 Step 5 | claude, codex |
-| `unified-reviewer` | teammate | Phase 1 Step 5 (SIMPLE) | claude, codex, kimi |
+| `unified-reviewer` | teammate | Phase 1 Step 5 (every level) | claude, codex, kimi |
 | `coder` | teammate | Phase 1 Step 5, Phase 2 | claude, codex **(experimental)** |
 
 **Kind determines the mechanic:**
@@ -43,6 +40,11 @@ Canonical role IDs. These are the keys usable in the config `roles` block.
   protocol, and delegates the thinking to the external CLI session.
 
 `lead` and `browser-verifier` ignore any assignment other than `claude` — warn once and continue.
+
+**Retired role IDs:** `security-reviewer`, `logic-reviewer`, `quality-reviewer` no longer exist —
+every task is reviewed by `unified-reviewer` alone. If a config still lists them, warn once
+(`⚙️ Роли security/logic/quality-reviewer больше нет — ревью делает unified-reviewer; назначь движок
+ему.`) and ignore those keys. Do NOT carry their engine over to `unified-reviewer` silently.
 
 ---
 
@@ -57,8 +59,7 @@ except (on invalid JSON) one warning line.
 ```json
 {
   "roles": {
-    "security-reviewer": "codex",
-    "logic-reviewer": "codex",
+    "unified-reviewer": "codex",
     "risk-tester": "codex"
   }
 }
@@ -73,7 +74,7 @@ Any role not listed = `claude`.
   "enabled": true,
   "fallback": "claude",
   "roles": {
-    "security-reviewer": "codex",
+    "unified-reviewer": "codex",
     "risk-tester": { "engine": "codex", "effort": "xhigh" },
     "architect-backend": "codex",
     "web-researcher": "grok"
@@ -232,13 +233,13 @@ session with the engine's `resume` command rather than starting over.
 ## Mechanic B: Proxy Teammate
 
 For conversational roles. The team keeps its shape: the coder still sends
-`SendMessage(recipient="security-reviewer", ...)` and gets a normal review back.
+`SendMessage(recipient="unified-reviewer", ...)` and gets a normal review back.
 
 Spawn `agent-teams:proxy-teammate` with the same `name` the Claude teammate would have had, and a
 prompt containing:
 
 - `ROLE: <role id>` and the **full role brief** — see "Preparing the Role Brief" below
-  (`agents/security-reviewer.md` etc.) so the external engine inherits identical instructions.
+  (`agents/unified-reviewer.md` etc.) so the external engine inherits identical instructions.
 - `ENGINE: <name>` plus the resolved `cmd` / `resume` / `sandbox` / session-extraction pattern.
 - The same context block the Claude teammate would receive (feature summary, DoD, gold standards,
   confirmed risks, team roster).
@@ -302,8 +303,8 @@ Contract.
 ### Which roles transfer well
 
 Prefer to offload *read → produce a list* roles — reviewers, researchers, verifiers, `risk-tester`:
-self-contained work with citable, checkable output. Keep `tech-lead`, `architect`,
-`quality-reviewer` and `coder` on Claude — their value is judgment, cross-task memory,
+self-contained work with citable, checkable output. Keep `tech-lead`, `architect`
+and `coder` on Claude — their value is judgment, cross-task memory,
 project-convention knowledge, and team protocol, the parts that do not survive a CLI boundary.
 This is guidance, not enforcement — the config allows any assignment in the registry — but when a
 run produces confusing results, check the assignment against this list first.

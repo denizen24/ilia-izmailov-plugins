@@ -19,9 +19,6 @@
     "architect-backend": "claude",
     "architect-systems": "claude",
 
-    "security-reviewer": "claude",
-    "logic-reviewer": "claude",
-    "quality-reviewer": "claude",
     "unified-reviewer": "claude",
 
     "coder": "claude"

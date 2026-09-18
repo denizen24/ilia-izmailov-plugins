@@ -2,7 +2,7 @@
 
 ## Lead's Role: Coordinate Minimally, Narrate Continuously
 
-Coders communicate directly with reviewers/architects and tech-lead/primary-architect via SendMessage. Lead handles progress tracking and exceptional events — and **prints a live feed line for every meaningful event** (📢 column below). This is the user's only window into the work; without it Phase 2 is a black box.
+Coders communicate directly with the reviewer (and, on MEDIUM, tech-lead for escalations) via SendMessage. Lead handles progress tracking and exceptional events — and **prints a live feed line for every meaningful event** (📢 column below). This is the user's only window into the work; without it Phase 2 is a black box.
 
 Feed rules: user's language, product terms, one entry per event, always include the progress counter `{done}/{total}` on task events. See "Progress Feed" in SKILL.md.
 
@@ -16,11 +16,10 @@ Feed rules: user's language, product terms, one entry per event, always include 
 | Coder: `QUESTION: task #N. [question]` | Answer from Phase 1 context if possible. If not — dispatch a researcher (Explore or general-purpose with WebSearch), then SendMessage the answer to coder. | Only if a researcher was dispatched: `🔍 Task #N raised a question ({what, in product terms}) — researching.` Answered-from-context questions are noise, don't print. |
 | Coder: `STUCK: task #N` | First, try to answer from Phase 1 context. Only dispatch a researcher if the problem requires reading code not yet seen. Then: adjust the task, split it, or reassign to a different coder. | `⏸️ Task #N stuck: {problem in product terms} — {what Lead is doing about it}` |
 | Coder: `LEGACY_FOUND: task #N` | Note it (entries are in LEGACY_REPORT.md; handled in Phase 3). | `🧹 Task #N left old code behind ({N} item(s)) — I'll ask you what to do with it at the end.` |
-| Coder: `REVIEW_LOOP: task #N` | MEDIUM: forward to tech-lead. SIMPLE and COMPLEX: **you rule on it yourself** — ask both sides for their position in three lines each (you do not need to read the code to see which one matches the plan), decide, and write it to DECISIONS.md. If the disagreement is genuinely technical and you lack the knowledge, dispatch a researcher. | `⏸️ Task #N: review going in circles ({topic}) — escalated to {tech lead / primary architect} for a ruling.` |
+| Coder: `REVIEW_LOOP: task #N` | MEDIUM: forward to tech-lead. SIMPLE and COMPLEX: **you rule on it yourself** — ask both sides for their position in three lines each (you do not need to read the code to see which one matches the plan), decide, and write it to DECISIONS.md. If the disagreement is genuinely technical and you lack the knowledge, dispatch a researcher. | `⏸️ Task #N: review going in circles ({topic}) — {tech lead ruling / my ruling}: {outcome}.` |
 | Tech Lead: `DECISION: [one-liner]` (MEDIUM only) | No action — decision is already logged in DECISIONS.md by its author. On SIMPLE/COMPLEX you write these yourself. | `📋 Decision: {the one-liner, in product terms — what was decided and why}` |
 | Proxy teammate: `ENGINE RUNNING: {role} on {engine}, started {HH:MM}` + output path | Record the start time and output path in state.md. No other action. | `⚙️ {role} работает на {engine}, запущен в {HH:MM}.` |
-| Proxy teammate: `ENGINE_DOWN: {role}. {reason}` | Apply `fallback` from the engine config (default `claude`): spawn the normal Claude teammate under the **same name**, then SendMessage affected coders: "ROSTER UPDATE: {role} is back — re-send any pending REVIEW request." If `fallback: "fail"`, stop the run and report. | `⚙️ {engine} отвалился на роли «{role}» ({reason}) — переключил на Claude, работа продолжается.` |
-| Unified reviewer: `ESCALATE TO MEDIUM` | Spawn 3 specialized reviewers (security, logic, quality) + tech-lead. SendMessage to coder: "ROSTER UPDATE: your reviewers are now security-reviewer, logic-reviewer, quality-reviewer. Your architectural gate is now tech-lead. Cancel pending unified-reviewer wait and re-send REVIEW to new roster." Shut down unified-reviewer. | `⚖️ Task turned out riskier than expected ({reason}) — strengthening the team: 3 specialized reviewers + tech lead.` |
+| Proxy teammate: `ENGINE_DOWN: {role}. {reason}` | Apply `fallback` from the engine config (default `claude`): spawn the normal Claude teammate under the **same name**, then SendMessage affected coders: "ROSTER UPDATE: {role} was replaced — re-send any pending REVIEW request to {role}." If `fallback: "fail"`, stop the run and report. | `⚙️ {engine} отвалился на роли «{role}» ({reason}) — переключил на Claude, работа продолжается.` |
 
 ## Task-Done Digest
 
@@ -102,42 +101,42 @@ Read the two together:
 A fresh finisher starts near 90k and does a handful of turns. That is strictly cheaper than you
 reading the diff at 380k, and it keeps you out of the code.
 
-## Rotating Reviewers
+## Rotating the Reviewer
 
-Reviewers live for the whole run, so they accumulate every review of every task — the same disease
-the architects had. Measured on a real run: three reviewers took **55%** of the whole run, and the
-heaviest one reached a 346k context and cost more than all eleven coders combined.
+The reviewer lives for the whole run, so it accumulates every review of every task — the same disease
+the architects had. Measured on a real run with three reviewers: they took **55%** of the whole run,
+and the heaviest one reached a 346k context and cost more than all eleven coders combined. With one
+reviewer doing all the reviews, it fills up three times as fast.
 
-**Rotate one reviewer every 3 completed tasks, round-robin.** Never all three at once — that drops
-all continuity at the same moment. Rotation happens at a task boundary, never mid-review.
+**Rotate the reviewer every 3 completed tasks.** Rotation happens at a task boundary, never
+mid-review: wait until no REVIEW request is in flight.
 
-When the counter comes up for reviewer X:
-
-1. SendMessage to X:
+1. SendMessage to unified-reviewer:
    ```
    ROTATION. Write a standing-findings note to
-   .claude/teams/{team-name}/reports/standing-{your-role}-{n}.md — at most 15 lines:
+   .claude/teams/{team-name}/reports/standing-unified-reviewer-{n}.md — at most 15 lines:
    - issues you saw repeat across more than one task
    - decisions already settled, so your successor does not reopen them
    - what deserves extra suspicion in the remaining tasks
    Do NOT summarise your individual reviews — they are all in reports/. Then send DONE and stop.
    ```
-2. Wait for DONE, then shut X down.
+2. Wait for DONE, then shut it down.
 3. Spawn a fresh reviewer under **the same name** (so coders' rosters stay valid), with the normal
    Step 5 prompt plus:
    ```
-   --- STANDING FINDINGS FROM YOUR PREDECESSOR ---
-   {contents of reports/standing-{role}-*.md — all of them, 15 lines each}
+   --- STANDING FINDINGS FROM YOUR PREDECESSORS ---
+   {contents of reports/standing-unified-reviewer-*.md — all of them, 15 lines each}
    --- END ---
    ```
-4. 📢 `🔄 {Ревьюер X} сменился — новый принял смену, накопленные наблюдения переданы.`
+   If a coder's REVIEW request arrived during the handover, SendMessage that coder: "ROSTER UPDATE:
+   unified-reviewer was replaced — re-send your pending REVIEW request to unified-reviewer."
+4. 📢 `🔄 Ревьюер сменился — новый принял смену, накопленные наблюдения переданы.`
 
 The successor starts near 100k instead of 350k. What is lost is the memory of individual past
 reviews; what mattered — the cross-task patterns — is in the note, and every review itself is in
 `reports/`.
 
-**Do not rotate on a timer or on turn count.** Task boundaries are the only safe point: no review is
-in flight, and no coder is waiting on an answer.
+**Do not rotate on a timer or on turn count.** Task boundaries are the only safe point.
 
 ## Spawning New Coders
 

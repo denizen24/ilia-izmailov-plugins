@@ -98,9 +98,11 @@ The Lead evaluates the feature against concrete triggers (not subjective judgmen
 
 | Level | Triggers | Team |
 |-------|----------|------|
-| **SIMPLE** | 0-1 medium triggers | Lead + Coder + Unified Reviewer (3 agents) |
-| **MEDIUM** | 2-3 medium triggers, 0 complex triggers | Lead + Tech Lead + 1-3 Reviewers + Coders (4-6 agents) |
-| **COMPLEX** | 4+ medium triggers OR any complex trigger | Lead + 3 Architects (debate only) + 3 Reviewers + Coders + Risk Testers (5-8+ agents) |
+| **SIMPLE** | 0-1 medium triggers | Lead + Coder + Reviewer (3 agents) |
+| **MEDIUM** | 2-3 medium triggers, 0 complex triggers | Lead + Tech Lead + Reviewer + Coders + Risk Testers (4+ agents) |
+| **COMPLEX** | 4+ medium triggers OR any complex trigger | Lead + 3 Architects (debate only) + Reviewer + Coders + Risk Testers (5-8+ agents) |
+
+Complexity changes planning, never the number of reviewers: every task gets exactly one review.
 
 **Medium triggers** (6 checks): 2+ layers touched, changes existing behavior, near sensitive areas, 3+ tasks, task dependencies, 5+ files.
 
@@ -163,31 +165,33 @@ Coders receive their task along with gold standard examples — real files from 
 Each coder lives exactly one task. Task history helps nobody but is re-read on every remaining turn,
 so carrying it is pure cost; anything genuinely worth passing on goes in the handover note.
 
-**Reviewers rotate too** — one every three completed tasks, round-robin, at task boundaries only.
+**The reviewer rotates too** — every three completed tasks, at task boundaries only.
 The retiring reviewer leaves a ≤15-line standing-findings note (what repeated across tasks, what is
 already settled) and the replacement takes the same name, so coders' rosters stay valid. Without
-rotation, reviewers accumulate every review of every task and become the most expensive agents in
-the run.
+rotation, the reviewer accumulates every review of every task and becomes the most expensive agent
+in the run.
 
-**Specialized Review**
+**Review — one pass per task**
 
-Coders drive the review process — they message reviewers directly. Lead is NOT in the review loop.
+Coders drive the review process — they message the reviewer directly. Lead is NOT in the review loop.
 
-**SIMPLE** — one Unified Reviewer covers security basics, logic, and quality in a single pass. Automatically escalates to MEDIUM if code touches sensitive areas.
+Every task, at every complexity level, passes two gates before commit:
 
-**MEDIUM** — three permanent reviewers work in parallel:
+1. **Coder self-check** — conventions checklist, then linter, type checker and tests.
+2. **One review** by the Unified Reviewer, in priority order:
 
-| Reviewer | What they catch |
+| Priority | What it catches |
 |----------|----------------|
 | **Security** | SQL injection, XSS, auth bypasses, exposed secrets, IDOR |
-| **Logic** | Race conditions, off-by-one errors, null pointer exceptions, async issues |
-| **Quality** | DRY violations, unclear naming, missing abstractions, convention drift |
+| **Logic** | Race conditions, off-by-one errors, null handling, async issues |
+| **Fit with the plan** | Deviations from gold standards not recorded in DECISIONS.md, contradicted decisions |
+| **Quality** | DRY violations, unclear naming, wrong abstractions, dead code |
 
-**COMPLEX** — the 3 Architects serve as domain-specific reviewers (no separate security/logic/quality reviewers needed).
+When a task touches auth, payments, migrations or shared infrastructure, the reviewer goes deeper
+on its own — it traces every path from user input to storage and response.
 
-**Architectural Approval**
-
-After reviewers finish, Tech Lead (MEDIUM) or Primary Architect (COMPLEX) gives final sign-off on cross-task consistency.
+Everything that needs the whole feature in view is checked once, at the end: cross-task
+consistency (Tech Lead on MEDIUM, a one-shot checker otherwise) and the verifiers in Phase 3.
 
 #### Phase 3: Completion & Verification
 
@@ -258,13 +262,10 @@ These conventions are used by `/team-feature` as few-shot examples for coders. R
 | **Lead** | Whole session | Orchestrates pipeline, dispatches researchers, monitors progress |
 | **Codebase Researcher** | One-shot | Returns condensed project summary (structure, stack, patterns) |
 | **Reference Researcher** | One-shot | Returns full content of best example files for each layer |
-| **Tech Lead** | Permanent (MEDIUM) | Validates plan, architectural review, maintains DECISIONS.md |
-| **Architect** | Permanent (COMPLEX) | Debates spec, then reviews code in domain. 3 personas: Frontend, Backend, Systems |
+| **Tech Lead** | Permanent (MEDIUM) | Validates plan, identifies risks, rules on escalations, maintains DECISIONS.md, final cross-task check. Does not review tasks |
+| **Architect** | Debate only (COMPLEX) | Debates spec, writes a domain review brief, stands down. 3 personas: Frontend, Backend, Systems |
 | **Coder** | Per task | Implements matching gold standards, self-checks, requests review directly |
-| **Security Reviewer** | Permanent (MEDIUM) | Injection, XSS, auth bypasses, IDOR, secrets |
-| **Logic Reviewer** | Permanent (MEDIUM) | Race conditions, edge cases, null handling, async |
-| **Quality Reviewer** | Permanent (MEDIUM) | DRY, naming, abstractions, convention compliance |
-| **Unified Reviewer** | Permanent (SIMPLE) | All-in-one reviewer; escalates to 3 reviewers if needed |
+| **Unified Reviewer** | Permanent, rotated every 3 tasks | The one per-task review: security, logic, fit with the plan, quality |
 | **Risk Tester** | One-shot | Verifies specific risks by reading code and running test scripts |
 | **CI Verifier** | One-shot | Runs build, typecheck, lint, tests — reports PASS/FAIL/BROKEN |
 | **Browser Verifier** | One-shot | Navigates pages, checks elements and interactions via Chrome |
@@ -286,7 +287,7 @@ Copy `agent-teams.example.json` to `~/.claude/agent-teams.json` and change only 
 ```json
 {
   "roles": {
-    "security-reviewer": "codex",
+    "unified-reviewer": "codex",
     "risk-tester": "codex",
     "web-researcher": "grok"
   }
@@ -346,12 +347,9 @@ agent-teams/
 │   ├── ci-verifier.md
 │   ├── codebase-researcher.md
 │   ├── coder.md
-│   ├── logic-reviewer.md
 │   ├── proxy-teammate.md
-│   ├── quality-reviewer.md
 │   ├── reference-researcher.md
 │   ├── risk-tester.md
-│   ├── security-reviewer.md
 │   ├── spec-verifier.md
 │   ├── tech-lead.md
 │   └── unified-reviewer.md

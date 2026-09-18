@@ -12,13 +12,13 @@ The conventions task (created in Phase 1 Step 3) should now be unblocked. Assign
 
 The coder receives the task description which tells them exactly what to create/update (signal sources are listed there). If `.conventions/` didn't exist before, bootstrap it with the key patterns researchers identified.
 
-The conventions task is tracked in the task list like any other task. It goes through the same review flow (coder implements → reviewers check → Tech Lead approves → commit).
+The conventions task is tracked in the task list like any other task. It goes through the same review flow (coder self-checks → unified-reviewer approves → commit).
 
 After the conventions task is done, report what was created/updated in the summary.
 
 ## 2. Cross-Task Consistency Check
 
-**MEDIUM:** ask Tech Lead for a final cross-task consistency check.
+**MEDIUM:** SendMessage to tech-lead: `CROSS-TASK CHECK: git diff {base-commit}..HEAD` — it replies with a list of inconsistencies (see tech-lead.md).
 
 **SIMPLE and COMPLEX:** no long-lived architectural agent exists by now — on COMPLEX the architects
 handed over review briefs and stood down after the debate. Spawn a **one-shot** checker instead. It
@@ -41,7 +41,7 @@ Look for: the same concept named or modelled two different ways across tasks; du
 two coders wrote independently; contradictory assumptions at the seams between tasks; a shared type,
 config or schema changed by one task in a way another task did not account for.
 
-Do NOT report per-task issues — reviewers already covered those. Only report what needs two or more
+Do NOT report per-task issues — the reviewer already covered those. Only report what needs two or more
 tasks side by side to notice.
 
 Return a short list: file:line, what is inconsistent, which tasks disagree. Empty list if clean."
@@ -299,7 +299,7 @@ Do NOT remove anything not on this list. Run self-checks + request review as usu
 )
 ```
 
-Assign to a coder (spawn a fresh coder if all current ones are shut down, or reuse an active one). Wait for DONE. Reviewers must approve.
+Assign to a coder (spawn a fresh coder if all current ones are shut down, or reuse an active one). Wait for DONE. The reviewer must approve.
 
 **"Later" items** → append to `.legacy-todo.md` at repo root (create the file if missing):
 ```
@@ -333,7 +333,7 @@ Risk analysis (pre-implementation):
   Risks identified: N | Confirmed & mitigated: N | Dismissed: N
 
 Review stats (post-implementation):
-  Security: N found & fixed | Logic: N | Quality: N
+  Security: N found & fixed | Logic: N | Quality: N   (by finding category in the review reports)
   Convention violations: N | Escalations: N
 
 Verification:
@@ -357,9 +357,9 @@ Runtime verification: {N/A if no human checks | PENDING — see Human Checks bel
 ## 8. Shutdown Team
 
 - SendMessage(type="shutdown_request") to all permanent teammates:
-  - MEDIUM: Tech Lead + security-reviewer + logic-reviewer + quality-reviewer
-  - COMPLEX: architect-frontend + architect-backend + architect-systems
-  - SIMPLE: unified-reviewer
+  - All levels: unified-reviewer
+  - MEDIUM: also tech-lead
+  - COMPLEX: architects already stood down in Phase 1 — nothing more to shut down
 - TeamDelete
 
 ## 9. Present Human Checks to User
