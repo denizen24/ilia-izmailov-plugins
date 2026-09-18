@@ -250,7 +250,7 @@ These conventions are used by `/team-feature` as few-shot examples for coders. R
 | Artifact | Created by | Purpose |
 |----------|-----------|---------|
 | `.conventions/` | Conventions task | Gold standards, anti-patterns, automated checks for future runs |
-| `DECISIONS.md` | Tech Lead / Primary Architect | Architectural decisions, approved deviations, debate summary |
+| `DECISIONS.md` | Tech Lead (MEDIUM); on COMPLEX Primary Architect during planning, then Lead | Architectural decisions, approved deviations, debate summary |
 | `VERIFICATION_PLAN.md` | Lead / Architects | Checklist of automated and manual checks |
 | `VERIFICATION_REPORT.md` | Verification phase | Detailed results with pass/fail/skip per check |
 | `state.md` | Lead | Team state for compaction recovery |

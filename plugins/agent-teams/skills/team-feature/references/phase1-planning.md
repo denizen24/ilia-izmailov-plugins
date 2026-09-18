@@ -464,13 +464,11 @@ Wait for all 3 architects to send "SPEC APPROVED" to Lead. If they converge:
 
 ```
 SendMessage to {primary architect}:
-"You are now PRIMARY ARCHITECT. Additional responsibilities:
-- Create and maintain DECISIONS.md
-- Handle escalations from coders
-- Cross-task consistency checks
-- Tiebreaker when architects disagree during review
+"You are now PRIMARY ARCHITECT, until the hand-over at Step 5. Additional responsibilities:
+- Create DECISIONS.md with the debate summary
+- Risk identification and processing risk-test results (Step 4b)
 
-Include the debate summary in DECISIONS.md."
+After you stand down, Lead maintains DECISIONS.md and takes escalations."
 ```
 
 **If architects don't converge after 3 rounds:** Lead reads their final positions, makes the decision, applies changes, and picks Primary. Document the disagreement in DECISIONS.md.
