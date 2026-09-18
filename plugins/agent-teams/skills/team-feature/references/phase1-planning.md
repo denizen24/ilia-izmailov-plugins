@@ -347,6 +347,15 @@ This is NOT optional. Every /team-feature run must leave .conventions/ up to dat
 
 Every task starts UNASSIGNED; statuses go into the `## Tasks` section of state.md when you write it at Step 5. The conventions task is the LAST task — verification runs automatically in Phase 3 after all tasks complete.
 
+**"Last" means after the code is committed, not merely after the code is written.** The conventions
+task quotes the tree — `file:line`, counts, "the project never does this" — and every one of those
+claims rots the moment another coder touches the same file. Never run it beside a coding task, not
+even a small fix (2026-09-17: it ran alongside a fix in the same file and its citations drifted by
+one and nine lines before the reviewer caught them). Two rules that keep it honest: cite moving code
+by a stable anchor — a `data-testid`, an exported symbol, an effect's dependency — rather than a line
+number; and if a claim of "no violations" cannot be recounted in full, narrow the claim instead of
+moving the date on it.
+
 ## Step 4: Validate Plan
 
 **For SIMPLE:** Skip plan validation entirely.
@@ -671,6 +680,15 @@ SANDBOX: read-only   (coder: workspace-write + explicit allowed-file list)
 ```
 
 Then the normal prompt text follows unchanged. The roster other teammates see is identical — coders address `security-reviewer` either way.
+
+**Spawn reviewers with their first request, not before it.** A teammate told to "wait for review
+requests" ends its turn immediately and hands Lead an empty "nothing to do yet" report — one per
+reviewer, before any code exists. Instead, keep the reviewer prompts ready and spawn each reviewer
+when the first `TO: <reviewer>` message arrives: write the relayed body verbatim to
+`reports/relay-{sender}-{subject}.md`, and end the spawn prompt with "FIRST REQUEST (relayed by
+Lead, verbatim, in this file): {path} — it starts with FROM: {sender}. Review it now." The roster,
+the names and everything downstream are unchanged; from the second request on they are resumed by
+Lead relay as usual. Same trick works for a tech-lead whose first job is `VALIDATE PLAN`.
 
 ### 1. Reviewers
 

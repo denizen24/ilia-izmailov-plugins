@@ -19,13 +19,20 @@ assumes these rules; when one of them seems to say otherwise, this file wins.
   | Sender → recipient | Recipient state | Result |
   |---|---|---|
   | lead → teammate | finished its turn | delivered — the teammate is resumed |
-  | lead → teammate | running, even inside its last tool call | delivered before its turn ends |
+  | lead → teammate | running, and it takes another tool round | delivered at that round |
+  | lead → teammate | running, but it ends its turn without another tool round | `success: queued` — **not delivered** |
   | teammate → teammate | still running tool calls | delivered at its next tool call |
   | teammate → teammate | finished its turn | `success: true, queued` — **but never delivered** |
 
   Reviewers, tech-lead and waiting coders spend most of a run with their turn finished. Direct
   teammate-to-teammate messaging therefore loses exactly the messages the pipeline depends on, and
   the sender is told it succeeded.
+
+  **Row 3 is the one that surprises a lead.** A teammate busy with someone else's request is not a
+  safe recipient: on 2026-09-17 a reviewer mid-review for task #3 was sent task #2's request,
+  answered #3, and ended its turn reporting "nothing further pending" — the second request was never
+  in its transcript. So the idle check in §3 applies to **Lead's own forwards too**, not only to
+  messages between teammates: a request stays open until the answer comes back, whoever sent it.
 
 Hence three rules: **no team lifecycle calls, the plan lives in a file, every message between
 teammates goes through the lead.**
@@ -91,6 +98,12 @@ Gold standard references: src/server/routers/profile.ts
 - Send it with `SendMessage(to="main", ...)`. If you are ending your turn anyway, the final reply
   with the same header works too — it reaches the lead. **One channel per message:** never send it
   both ways.
+  **Prefer the final reply, and keep the two disjoint.** The runtime hands Lead your end-of-turn
+  report whether or not you also called `SendMessage`, so a message sent both ways arrives twice and
+  Lead cannot tell a repeat from a new request (every architect and reviewer did this in the
+  2026-09-17 run until asked not to). If you do call `SendMessage` for something that must travel
+  immediately, make your final reply a single line that names it — "REVIEW for task #3 sent" — never
+  a second copy of the body.
 - **After sending something that needs an answer, end your turn.** Do not sleep, poll or re-read
   files while waiting: the answer arrives as a new message from the lead, and that message resumes
   you.

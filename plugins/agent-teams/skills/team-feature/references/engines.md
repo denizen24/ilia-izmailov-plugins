@@ -167,8 +167,8 @@ fails to start (observed in a live run on 2026-08-17).
 ### cursor
 
 ```
-cmd:     cursor-agent -p --trust --output-format json --model {model} {mode_flags} "$(cat {prompt_file})"
-resume:  cursor-agent -p --trust --output-format json --model {model} {mode_flags} --resume {session} "$(cat {prompt_file})"
+cmd:     cursor-agent -p --trust --output-format json --model {model} {mode_flags} -- "$(cat {prompt_file})"
+resume:  cursor-agent -p --trust --output-format json --model {model} {mode_flags} --resume {session} -- "$(cat {prompt_file})"
 model:   cursor-grok-4.6-xhigh
 mode:    read-only → --mode ask, workspace-write → --sandbox enabled -f
 session: extract from the JSON reply, field `"session_id": "<uuid>"` — it arrives with the reply, at the end
@@ -195,6 +195,18 @@ the run ends, so the id is known only when the call returns — write `session.t
 
 **Prompt through a file.** Role briefs contain quotes, backticks and newlines; passing them inline
 loses to shell quoting. Write the brief to a file and interpolate `"$(cat {prompt_file})"`.
+
+**`--` before the prompt is MANDATORY** — without it a prompt that begins with `-` is parsed as an
+option. Role briefs start with `---` (the agent file's frontmatter fence, or a `--- ROLE BRIEF ---`
+header), so this is not an edge case: in a live run on 2026-09-17 both researchers died instantly
+with `error: unknown option '--- ROLE BRIEF ---…'`, exit 1, empty session, and the only clue was in
+the out file.
+
+**Read mode cannot write files — the caller writes them.** Several roles are told by their own agent
+file to *write* something (an architect writes `reports/debate-rN-{name}.md`, a reviewer writes
+`reports/review-task{id}-…md`). Under `--mode ask` the engine cannot do that. Translate it: ask the
+engine to return the full text in its reply, and the proxy (or Lead, for a one-shot) saves it to the
+file the role would have written. State this in the brief, or the engine burns a turn failing.
 
 **Binary path.** Installs to `~/.local/bin` (a symlink into `~/.local/share/cursor-agent/versions/`).
 If the shell cannot find `cursor-agent`, prefix the call with `PATH="$HOME/.local/bin:$PATH"`.

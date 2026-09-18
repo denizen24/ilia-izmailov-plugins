@@ -50,6 +50,13 @@ Return a short list: file:line, what is inconsistent, which tasks disagree. Empt
 
 Findings become fix tasks in the same fix-verify loop as everything else.
 
+**Never skip this step because the run looks clean.** It is the only check that sees two tasks at
+once, and parallel tasks break each other in ways no per-task reviewer can see. Measured on
+2026-09-17: two tasks moved the same shared component in opposite directions, one of them quietly
+dropped a notice the user relies on before the call connects — and it passed three reviewers, both
+page test suites, the build, and a 194-measurement browser run. The cross-task checker found it in
+one pass. A green board is exactly when this step pays for itself.
+
 ## 3. Completion Gate
 
 Lead verifies before declaring done:
@@ -252,6 +259,16 @@ Thoroughness: medium. Under 3 minutes. Report findings concisely — max 10 item
 ```
 
 Append the scan findings to `LEGACY_REPORT.md` under a separate section `## From Phase 3 safety scan`.
+
+**A scan item is a hypothesis, not an order.** The scanner reads text; it does not run the product.
+When the user approves a cleanup, the coder that carries it out is explicitly allowed — and expected —
+to verify the claim first and to come back with `ESCALATION` instead of doing it, if the item turns
+out to be wrong. Put that sentence in the cleanup task. Real case, 2026-09-17: a scan called two CSS
+classes on a `<video>` redundant next to `absolute inset-0`; removing them changed nothing in the
+tests or the build, and enlarged the cropped video in a real browser — a replaced element with
+`width/height: auto` takes its intrinsic size. The coder measured it in Chromium, refused the item
+and wrote the measurement into `.conventions/` so nobody "cleans it up" again. Items about layout,
+timing, or anything a headless test environment cannot render deserve that treatment by default.
 
 ### 6c. Decide with the user
 

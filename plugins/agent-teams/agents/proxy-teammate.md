@@ -106,7 +106,18 @@ you never see it.
 
 - **`coder` and `risk-tester`: always `run_in_background: true`** — their runs routinely exceed
   the 10-minute Bash ceiling, and a foreground call that hits it loses the report.
-- Other roles: foreground with `timeout: 600000`.
+  **Never add a trailing `&` to the command as well.** With both, the tool reports "completed" within
+  seconds while the real engine keeps running orphaned, and you announce a finished run that has not
+  produced anything yet (hit twice in one live run, 2026-09-17; recovered only by polling the pid).
+- Other roles: foreground with `timeout: 600000`. Stay in your turn until the out file is complete —
+  a reviewer proxy that ends its turn while the engine runs leaves the coder waiting on a verdict
+  that already exists on disk.
+
+**A read-only engine cannot write files — you write them.** Where your role brief says the role
+writes a report (`reports/debate-r{N}-{name}.md`, `reports/review-task{id}-{role}-r{round}.md`), ask
+the engine for the full text in its reply, then save that text verbatim to the file the role would
+have written, and only then relay the short verdict. Do not pass the write instruction through: under
+`cursor --mode ask` the engine refuses and spends the turn discovering that.
 
 **Immediately after launching, tell Lead where to look.** Do not estimate how long it will take —
 report only checkable facts:

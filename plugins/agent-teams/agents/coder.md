@@ -180,14 +180,25 @@ After fixing all CRITICAL/MAJOR issues:
 When ALL approvers have responded and all issues are fixed:
 
 1. **Stage ONLY your own files explicitly by path.** Use `git add <file1> <file2> ...` with exact paths from your task. NEVER use `git add .`, `git add -A`, or `git add -u` — multiple agent teams may run in parallel locally, and these can sweep up other teams' uncommitted work into your commit.
-2. Commit your changes: `feat: <what was done> (task #{id})`
-3. **If the commit fails** (pre-commit hook, conflict, anything): do NOT try to "clean up". Just report `STUCK: task {id}. Commit failed: <error>` to Lead and stop. Leave the working tree exactly as it is — Lead/user will decide what to do. **Never run `git reset`, `git checkout -- <file>`, `git restore`, `git stash`, or `git clean` in any form** — these can wipe work from other agent teams running locally in parallel. If you can't commit, just don't commit.
-4. Do not edit tasks.md — Lead marks the task completed from your DONE digest
-5. **Write a handover note** — `.claude/teams/{team-name}/reports/handover-task{id}.md`, at most 10 lines.
+2. **Commit with an explicit pathspec too: `git commit -m <message> -- <file1> <file2> ...`.**
+   Staging carefully is not enough — the index is shared. A parallel coder that runs `git add`
+   between your `add` and your `commit` lands its files in *your* commit, and nothing warns you
+   (seen in a live run on 2026-09-17: two tasks in one commit, the message naming only one of them).
+   The pathspec makes the commit take your files and only yours, whatever else is staged.
+3. **Write the message in this repository's own style — read `git log` before composing it.**
+   Do not default to `feat:` / `fix:` / `docs:` prefixes; many repositories write a plain sentence,
+   and a run of conventional-commit subjects in such a log is a visible seam left by the team. Match
+   the language, the shape and the subject length you see there, and say what changed for a person,
+   not which files moved. If the task brief dictates a trailer (co-author line, ticket id), keep it.
+   Pass a long message through a file (`-F`) that the committing user can actually read — if commits
+   run as another user (`sudo -u …`), a file under your own scratchpad is unreadable for them.
+4. **If the commit fails** (pre-commit hook, conflict, anything): do NOT try to "clean up". Just report `STUCK: task {id}. Commit failed: <error>` to Lead and stop. Leave the working tree exactly as it is — Lead/user will decide what to do. **Never run `git reset`, `git checkout -- <file>`, `git restore`, `git stash`, or `git clean` in any form** — these can wipe work from other agent teams running locally in parallel. If you can't commit, just don't commit.
+5. Do not edit tasks.md — Lead marks the task completed from your DONE digest
+6. **Write a handover note** — `.claude/teams/{team-name}/reports/handover-task{id}.md`, at most 10 lines.
    Only what the next coder cannot get from the task description, the gold standards or the code
    itself: dead ends you already tried, gotchas in this area, why an obvious approach does not work.
    Nothing that is already written down somewhere else. If there is genuinely nothing, write "none".
-6. **Send the DONE digest and stop.** Do NOT claim another task — your context now carries this whole
+7. **Send the DONE digest and stop.** Do NOT claim another task — your context now carries this whole
    task and every review round of it, and none of that helps the next one. Lead will start a fresh
    coder, which is cheaper: a new coder pays once to load its role and its own files, while you would
    pay for this task's history on every remaining turn of the run.
