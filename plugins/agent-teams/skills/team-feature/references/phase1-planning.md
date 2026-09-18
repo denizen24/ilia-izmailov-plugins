@@ -392,7 +392,8 @@ Definition of Done: {DoD from Step 3}
 CODEBASE CONTEXT (from research):
 {Paste codebase-researcher findings: tech stack, project structure, relevant existing code}
 
-Wait for my instructions (VALIDATE PLAN, IDENTIFY RISKS, RISK ANALYSIS RESULTS). During coding you get only escalations and REVIEW_LOOP from coders, and CROSS-TASK CHECK from me at the end — you do not review tasks."
+You will get my instructions (VALIDATE PLAN, IDENTIFY RISKS, RISK ANALYSIS RESULTS). During coding you get only escalations and REVIEW_LOOP from coders, and CROSS-TASK CHECK from me at the end — you do not review tasks.
+Now reply READY and end your turn."
 )
 ```
 
@@ -419,19 +420,19 @@ Task(subagent_type="agent-teams:architect", name="architect-frontend", run_in_ba
   prompt="You are the FRONTEND Architect for team feature-<short-name>.
 PERSONA: FRONTEND
 EXPERTISE: Component architecture, state management, UI patterns, client-side performance, accessibility, design system usage.
-Wait for DEBATE PLAN from Lead.")
+Reply READY and end your turn — DEBATE PLAN from Lead wakes you.")
 
 Task(subagent_type="agent-teams:architect", name="architect-backend", run_in_background=true,
   prompt="You are the BACKEND Architect for team feature-<short-name>.
 PERSONA: BACKEND
 EXPERTISE: API design, DB schema, data integrity, server-side performance, scalability, migration strategy.
-Wait for DEBATE PLAN from Lead.")
+Reply READY and end your turn — DEBATE PLAN from Lead wakes you.")
 
 Task(subagent_type="agent-teams:architect", name="architect-systems", run_in_background=true,
   prompt="You are the SYSTEMS Architect for team feature-<short-name>.
 PERSONA: SYSTEMS
 EXPERTISE: Testing strategy, CI/CD impact, convention compliance, developer experience, deployment, monitoring.
-Wait for DEBATE PLAN from Lead.")
+Reply READY and end your turn — DEBATE PLAN from Lead wakes you.")
 ```
 
 ### Step 4c-2: Launch debate:
@@ -457,12 +458,12 @@ YOUR TEAM:
 This is ROUND 1. Debate protocol, round files, domain verification checks, and convergence (SPEC APPROVED) — follow your agent file."
 ```
 
-**Run the rounds.** Create `.claude/teams/{team-name}/relay.log` empty before sending round 1. Architects never message each other — each writes
+**Run the rounds.** Architects never message each other — each writes
 `reports/debate-r{N}-{name}.md` and answers you `ROUND {N} from {persona}: AGREE | CONTEST`.
 
-1. Wait until all three answers of round N have arrived. Log `lead -> architect-x | ROUND N` when you
-   send and `architect-x -> lead | ROUND N from ...` when the answer comes (`team-runtime.md` §3). After
-   the FINAL answers, log `lead -> architect-x | CLOSED: debate` for all three.
+1. Send round 1 only after all three READY replies. Wait until all three answers of round N have
+   arrived. If an architect's turn ended without an answer, send it `STATUS?`; if it says it never
+   got the round, send the round message again.
 2. Print the 📢 round digest below.
 3. All three `AGREE`, or N = 3 → send all three: `"FINAL: send SPEC APPROVED, or FINAL POSITION if you still disagree."`
 4. Otherwise → send all three: `"ROUND {N+1}. Read the other architects' round {N} files: {the three paths}. Respond per your agent file."`
@@ -695,14 +696,9 @@ SANDBOX: read-only   (coder: workspace-write + explicit allowed-file list)
 
 Then the normal prompt text follows unchanged. The roster other teammates see is identical — coders address `unified-reviewer` either way.
 
-**Spawn the reviewer with its first request, not before it.** A teammate told to "wait for review
-requests" ends its turn immediately and hands Lead an empty "nothing to do yet" report before any
-code exists. Instead, keep the reviewer prompt ready and spawn the reviewer when the first
-`TO: unified-reviewer` message arrives: write the relayed body verbatim to
-`reports/relay-{sender}-{subject}.md`, and end the spawn prompt with "FIRST REQUEST (relayed by
-Lead, verbatim, in this file): {path} — it starts with FROM: {sender}. Review it now." The roster,
-the name and everything downstream are unchanged; from the second request on it is resumed by
-Lead relay as usual. Same trick works for a tech-lead whose first job is `VALIDATE PLAN`.
+**Spawn the reviewer before the coders, and let it go idle.** Its prompt ends with "Reply READY
+and end your turn". An idle teammate is woken by the first REVIEW message (`Resuming agent`), so
+nothing waits on Lead. Its READY report is expected — do not print it.
 
 ### 1. Reviewer
 
@@ -720,8 +716,9 @@ Gold standard references: {list reference files from researcher findings or .con
 Confirmed risks from risk analysis: {CONFIRMED risks from Step 4b — MEDIUM/COMPLEX; omit on SIMPLE}
 DECISIONS.md: .claude/teams/{team-name}/DECISIONS.md — re-read it before each review (if it exists)
 
-REVIEW requests from coders reach you relayed by Lead, starting with FROM: <coder>. Reply with TO: <coder> (team-runtime.md §3).
-Pay special attention to the confirmed risks above — verify that code properly addresses their mitigations.")
+REVIEW requests come directly from coders; reply directly to the coder (see "How messages travel" in your agent file).
+Pay special attention to the confirmed risks above — verify that code properly addresses their mitigations.
+Now reply READY and end your turn — the first REVIEW request wakes you.")
 ```
 
 **For COMPLEX** — architects hand over and stand down first; then the reviewer is spawned with their
@@ -809,7 +806,7 @@ your commit by building the file's content from its committed version plus your 
 their edits stay out of your commit. Report it in your DONE digest.
 ```
 
-Tell each coder their team roster — the exact names it puts in `TO:` headers. One prompt template for all complexities — only the YOUR TEAM ROSTER block and the task vary:
+Tell each coder their team roster — the exact names it messages. One prompt template for all complexities — only the YOUR TEAM ROSTER block and the task vary:
 
 ```
 Task(
@@ -821,7 +818,7 @@ Task(
 FEATURE GOAL: {1-2 sentences — what we're building and why, so you understand the big picture}
 DEFINITION OF DONE: {DoD from Step 3}
 
-YOUR TEAM ROSTER (address them with a TO: header — Lead relays, see your agent file):
+YOUR TEAM ROSTER (message them directly by name — see "How messages travel" in your agent file):
 {roster block by complexity — see below}
 
 IMPORTANT: If DECISIONS.md exists at .claude/teams/{team-name}/DECISIONS.md — read it before starting. It contains architectural decisions, confirmed risks, and their mitigations that affect your implementation.
@@ -845,26 +842,26 @@ Start working on your task."
 - **SIMPLE:**
   ```
   - Reviewer: unified-reviewer
-  - Lead: DONE/STUCK signals, escalations and review loops (no TO: line); also carries every TO: message you send
+  - Lead: DONE/STUCK signals, escalations and review loops; and a copy of any message that comes back `queued`
   ```
 - **MEDIUM:**
   ```
   - Reviewer: unified-reviewer
   - Tech Lead: tech-lead — escalations and review loops ONLY. Do not send REVIEW requests there.
-  - Lead: DONE/STUCK signals; also carries every TO: message you send
+  - Lead: DONE/STUCK signals; and a copy of any message that comes back `queued`
   ```
 - **COMPLEX:**
   ```
   - Reviewer: unified-reviewer
     (all three architects, Primary included, handed over review briefs and stood down — do NOT message them)
-  - Lead: DONE/STUCK signals, escalations and review loops (no TO: line); also carries every TO: message you send
+  - Lead: DONE/STUCK signals, escalations and review loops; and a copy of any message that comes back `queued`
   ```
   For COMPLEX, also make the DECISIONS.md line unconditional: "Read DECISIONS.md at .claude/teams/{team-name}/DECISIONS.md before starting — it contains the architect debate summary, confirmed risks, and mitigations that affect your implementation."
 
-### 3. Initialize Legacy Report and relay.log
+### 3. Initialize Legacy Report and pending.log
 
-Create `.claude/teams/{team-name}/relay.log` empty (on COMPLEX it already exists from the debate) —
-every forwarded message is logged there (`team-runtime.md` §3).
+Create `.claude/teams/{team-name}/pending.log` empty — copies flagged `QUEUED` are tracked there
+until delivered (`team-runtime.md` §3).
 
 
 Create an empty legacy report so coders have a single place to append findings during implementation:
@@ -888,7 +885,8 @@ Write(".claude/teams/{team-name}/state.md"):
 # Team State — feature-{name}
 
 ## Recovery Instructions
-If you lost context after compaction, read this file.
+If you lost context after compaction, read this file, PLAN.md (task statuses) and pending.log
+(deliver every OPEN line — team-runtime.md §3).
 - Check current phase below and follow its instructions
 - Update this file after each event
 
@@ -898,16 +896,17 @@ If you lost context after compaction, read this file.
 ## Base Commit: {git rev-parse HEAD before the first coder}
 
 ## Phase 2 Instructions (EXECUTION)
-Your role: relay every TO: message verbatim and log it in relay.log (references/team-runtime.md §3), listen for DONE/STUCK/ESCALATE.
-- Before ending a turn while no teammate is running: idle check against relay.log (team-runtime.md §3)
-- DO NOT read code, run checks, pick reviewers, or edit relayed messages — coders drive their own review loop
+Your role: listen for DONE/STUCK/ESCALATE; deliver QUEUED copies once the recipient is idle (pending.log, references/team-runtime.md §3).
+- Before ending a turn while work is unfinished and no teammate is running: idle check (team-runtime.md §3)
+- DO NOT read code, run checks, pick reviewers, or edit messages you deliver — coders drive their own review loop
 - Update this file after each event
 - Print a progress feed line to chat for each event — task digests, decisions, stuck reports (see phase2-monitoring.md event table). The user is watching the run live.
 - On DONE: mark the task DONE in PLAN.md, then spawn a coder for every task that just became available
 - When every coding task in PLAN.md is DONE (the conventions task is not a coding task) → change Phase to VERIFICATION and follow Phase 3 instructions below
 
 ## Phase 3 Instructions (VERIFICATION) — follow step by step when Phase changes
-When you change Phase to VERIFICATION, execute IN ORDER (full details: references/phase3-verification.md):
+When you change Phase to VERIFICATION, execute IN ORDER (full details: references/phase3-verification.md).
+Coders still run in Phase 3 (conventions, fixes, cleanup): keep delivering QUEUED copies and run the idle check before going idle, exactly as in Phase 2.
 1. Conventions task — spawn a fresh coder for its task id (PLAN.md), wait for DONE
 2. Final checks — cross-task consistency via Tech Lead (MEDIUM) or a one-shot checker (SIMPLE/COMPLEX); verify .conventions/ exists
 3. Prepare verification plan — read VERIFICATION_PLAN.md, update with actual paths/endpoints
@@ -921,7 +920,7 @@ When you change Phase to VERIFICATION, execute IN ORDER (full details: reference
 - fallback policy: {claude | fail}
 
 ## Team Roster
-- unified-reviewer: {ACTIVE | NOT_SPAWNED — spawned with its first request; on COMPLEX at Step 5a-3, after the architects handed over}
+- unified-reviewer: {ACTIVE} (spawned before the coders; on COMPLEX at Step 5a-3, after the architects handed over)
 - tech-lead: {ACTIVE | NOT_SPAWNED} (MEDIUM only)
 - architect-frontend / architect-backend / architect-systems: {DEBATING | STOOD_DOWN} (COMPLEX only)
 - tasks completed since last reviewer rotation: {N}
@@ -941,4 +940,4 @@ After spawning everyone and writing state.md, print one line — composition in 
 👥 Team assembled: 4 coders + a reviewer (the architects handed over their notes). Writing code — you'll see a line here for every completed task, decision, and problem.
 ```
 
-Coders drive their own review process; their `TO:` messages pass through you and you forward them verbatim. You carry the review loop, you do not take part in it.
+Coders drive their own review process and message the reviewer directly. You are not in the loop — you only deliver copies flagged `QUEUED`.

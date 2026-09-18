@@ -1,4 +1,4 @@
-# Team Runtime: implicit team, plan file, lead relay
+# Team Runtime: implicit team, plan file, direct messages with a Lead fallback
 
 How the team physically exists and talks in current Claude Code. Every other file in this skill
 assumes these rules; when one of them seems to say otherwise, this file wins.
@@ -13,29 +13,27 @@ assumes these rules; when one of them seems to say otherwise, this file wins.
 - **Messages are addressed by name.** `SendMessage(to="<name>")` reaches a teammate; a background
   teammate reaches the lead with `SendMessage(to="main")`, and its final reply reaches the lead
   anyway when its turn ends.
-- **Delivery depends on the recipient's state** (in-process teammates — every session inside an IDE
-  extension, and the default everywhere else):
+- **Delivery depends on the recipient's state, and the tool result tells you which case you hit.**
 
-  | Sender → recipient | Recipient state | Result |
+  | Recipient state when you send | SendMessage result | Delivered? |
   |---|---|---|
-  | lead → teammate | finished its turn | delivered — the teammate is resumed |
-  | lead → teammate | running, and it takes another tool round | delivered at that round |
-  | lead → teammate | running, but it ends its turn without another tool round | `success: queued` — **not delivered** |
-  | teammate → teammate | still running tool calls | delivered at its next tool call |
-  | teammate → teammate | finished its turn | `success: true, queued` — **but never delivered** |
+  | finished its turn (idle) | `Resuming agent <name>` | **yes** — the recipient is woken with your message |
+  | running, and it takes another tool round | `queued for delivery … at its next tool round` | yes, at that round |
+  | running, but it ends its turn without another tool round | `queued for delivery … at its next tool round` | **no** — it finishes without reading it |
 
-  The reviewer, tech-lead and waiting coders spend most of a run with their turn finished. Direct
-  teammate-to-teammate messaging therefore loses exactly the messages the pipeline depends on, and
-  the sender is told it succeeded.
+  Measured 2026-09-18 on Claude Code 2.1.276 (terminal and bb, with and without
+  `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`, foreground and background agents): a message to an idle
+  teammate returned `Resuming agent` and was answered every time. A message to a teammate that was
+  finishing its turn returned `queued` and was never read. An earlier measurement on 2.1.272–274 in
+  the IDE extension reported `queued` — and a loss — for idle teammates too.
 
-  **Row 3 is the one that surprises a lead.** A teammate busy with someone else's request is not a
-  safe recipient: on 2026-09-17 a reviewer mid-review for task #3 was sent task #2's request,
-  answered #3, and ended its turn reporting "nothing further pending" — the second request was never
-  in its transcript. So the idle check in §3 applies to **Lead's own forwards too**, not only to
-  messages between teammates: a request stays open until the answer comes back, whoever sent it.
+  **So `Resuming agent` means delivered, and `queued` means maybe not.** The rule below needs no
+  knowledge of which build or mode you are in: a sender that sees `queued` hands a copy to Lead.
+  Row 3 is real in practice: on 2026-09-17 a reviewer busy with task #3 was sent task #2's request,
+  answered #3, and ended its turn — the second request was never in its transcript.
 
-Hence three rules: **no team lifecycle calls, the plan lives in a file, every message between
-teammates goes through the lead.**
+Hence three rules: **no team lifecycle calls, the plan lives in a file, teammates message each
+other directly and hand Lead a copy whenever delivery is not confirmed.**
 
 ## 1. The team is implicit
 
@@ -49,7 +47,7 @@ teammates goes through the lead.**
   reaches the newest one ("latest wins"), so a rotated reviewer or an `ENGINE_DOWN` replacement keeps
   its name and coders' rosters stay valid.
 - If agent teams are switched off (no `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`, policy, older build),
-  nothing below changes: background agents plus lead relay is the whole mechanism.
+  nothing below changes: named background agents plus `SendMessage` is the whole mechanism.
 
 ## 2. The plan lives in `PLAN.md`
 
@@ -88,97 +86,78 @@ Feature DoD applies — see VERIFICATION_PLAN.md
 - "Blocked by" is Lead's scheduling rule: a task is available when it is TODO and every blocker is
   DONE. The conventions task is never available in Phase 2 — Lead spawns it in Phase 3.
 
-## 3. Lead relay — the only messaging protocol
+## 3. Messages: direct, with Lead as the fallback
 
 ### Teammate side
 
-Every message a teammate sends goes to the lead. A message meant for another teammate carries a
-routing header on its first line:
-
-```
-TO: unified-reviewer
-REVIEW: task #3. Files changed: src/server/routers/settings.ts
-Gold standard references: src/server/routers/profile.ts
-```
-
-- `TO:` lists exact roster names, comma-separated. A message without `TO:` is for the lead itself
-  (DONE, STUCK, QUESTION, DECISION, `ROUND N` answers, ...).
-- Send it with `SendMessage(to="main", ...)`. If you are ending your turn anyway, the final reply
-  with the same header works too — it reaches the lead. **One channel per message:** never send it
-  both ways.
-  **Prefer the final reply, and keep the two disjoint.** The runtime hands Lead your end-of-turn
-  report whether or not you also called `SendMessage`, so a message sent both ways arrives twice and
-  Lead cannot tell a repeat from a new request (every architect and reviewer did this in the
-  2026-09-17 run until asked not to). If you do call `SendMessage` for something that must travel
-  immediately, make your final reply a single line that names it — "REVIEW for task #3 sent" — never
-  a second copy of the body.
+- **Send directly to the teammate:** `SendMessage(to="<name>", message="REVIEW: task #3. ...")`.
+  Messages for Lead itself (DONE, STUCK, QUESTION, DECISION, `ROUND N` answers) go to `main`.
+- **Read the tool result every time:**
+  - `Resuming agent <name>` → delivered. Nothing else to do.
+  - `queued for delivery …` → **not confirmed.** Immediately send the same text to Lead, prefixed
+    with one line: `SendMessage(to="main", message="QUEUED: <name>\n<the same body>")`. Do not
+    send it to the teammate a second time — Lead takes it from here.
+  - an error, or an unknown name → `STUCK: cannot reach <name>` to Lead.
 - **After sending something that needs an answer, end your turn.** Do not sleep, poll or re-read
-  files while waiting: the answer arrives as a new message from the lead, and that message resumes
-  you.
-- Answers you receive start with `FROM: <name>`. Reply to that name through the same `TO:` header.
-- A message from Lead **without** a `FROM:` line is Lead's own question or instruction (ROTATION,
-  STATUS?, a REVIEW_LOOP position request, ROUND N). Answer it to Lead, with no `TO:` line — whatever
-  your role file says about not messaging Lead applies to routine work, not to this.
+  files while waiting: the answer resumes you. Ending your turn promptly also keeps you out of the
+  "running, about to finish" state in which messages to you get lost.
+- **A message whose first line is `RESEND: from <sender>`** is a copy Lead delivered because the
+  original may have been lost. If you already answered that request, reply to Lead only
+  `ALREADY ANSWERED: <its first line>` — no second review, no second message to the sender.
+  Otherwise handle it normally and answer `<sender>` directly.
+- **Answer every request that reached you** before ending your turn — two REVIEW requests can
+  arrive in the same turn.
 - **Exception — proxy teammates while their engine runs.** A proxy that launched its engine in the
   background stays in its turn until the engine process exits: it has nothing to be resumed by if it
   ends its turn early. "End your turn while waiting" applies to waiting on teammates, not on your engine.
-- Keep relayed messages short: verdict and file path. Detail lives in `reports/` (SKILL.md,
-  "Everything Important Goes to a File") — the lead forwards text, it never reads your files for you.
+- Keep messages short: verdict and file path. Detail lives in `reports/` (SKILL.md, "Everything
+  Important Goes to a File").
 
 ### Lead side
 
-For each incoming message with a `TO:` header:
+Lead is not in the message path. It only picks up what the senders flag, and it never reads the
+files a message points to.
 
-1. For every name in `TO:` — `SendMessage(to="<name>", message="FROM: <sender>\n<body without the TO: line>")`.
-   One message per recipient, in parallel. **Forward verbatim** — no summarising, no editing, no
-   reading of the referenced files. An exact repeat of a message you already forwarded is ignored.
-2. Append one line per recipient to `.claude/teams/{team-name}/relay.log` (see below).
-3. Apply the side effects the message implies (e.g. `IN_REVIEW` status in PLAN.md, 📢 feed line).
-4. If a name in `TO:` is not in the roster (stood down, never spawned), do not forward.
-   Reply to the sender: `ROSTER: <name> is not on the team — current roster: ...`. A name that
-   is mid-rotation is not "not on the team": hold the message and forward it to the successor.
-
-### relay.log — what is still owed
-
-Create it empty at Step 5, before the first teammate is spawned. One line per message Lead forwards
-or sends itself, and one per answer addressed to Lead, appended with `>>`, never rewritten:
+**On `QUEUED: <name>` from `<sender>`:** append a line to `.claude/teams/{team-name}/pending.log`:
 
 ```
-{HH:MM} {sender} -> {recipient} | {first line of the body}
-{HH:MM} lead -> architect-backend | ROUND 2
-{HH:MM} architect-backend -> lead | ROUND 2 from BACKEND: AGREE
-{HH:MM} lead -> x | CLOSED: {what}      (closes everything open towards x for that subject)
+{HH:MM} {sender} -> {name} | {first line of the body} | OPEN
 ```
 
-A request is **open** until a message from its recipient back to its sender arrives:
-`REVIEW` from coder-2 to unified-reviewer is open until a `unified-reviewer -> coder-2` line exists after
-it; the same for `ESCALATION`, `QUESTION`, and `ROUND N` until `architect-x -> lead | ROUND N ...`.
-Write `CLOSED:` when a request stops mattering (debate ended with FINAL, a task was re-scoped). The file survives compaction, so this is
-how Lead knows what is owed after losing its context, and which pending review to re-forward when a
-reviewer is rotated or replaced.
+Then deliver it the moment `<name>` is idle — right away if it already is (its turn ended since the
+send: you got its completion notification, or `ListAgents` shows it idle), otherwise on its next
+completion notification:
 
-Relay costs the lead one short tool call per recipient and keeps it out of the code. It is not
-"coordinating": the lead does not decide who reviews, does not wait for all verdicts, does not judge
-them — coders still drive their own review loop.
+```
+SendMessage(to="<name>", message="RESEND: from <sender>\n<the body, verbatim>")
+```
 
-### When an answer does not come
+- `Resuming agent` → mark the line `DELIVERED`. If you got `queued` again, leave it `OPEN` and
+  retry on the next completion notification.
+- Forward verbatim — no summarising, no editing.
 
-A missing answer means a lost or unsent message, not a slow teammate. Nothing wakes a team in which
-every member has ended its turn — so the check has a fixed trigger:
+**Lead's own messages follow the same rule.** VALIDATE PLAN, DEBATE PLAN, ROUND N, FINAL, IDENTIFY
+RISKS, ROTATION, ROSTER UPDATE, STATUS?: if the result is `queued`, add a pending.log line with
+sender `lead` and send it again on that teammate's next completion notification. To avoid the case
+altogether, send Lead's first instruction to a freshly spawned teammate only after its `READY` — every
+long-lived teammate (reviewer, tech-lead, architects) is spawned with "reply READY and end your turn".
+- If `<name>` was rotated or replaced meanwhile, deliver to the successor (same name, latest wins).
 
-**Idle check — before Lead ends a turn while work is unfinished and no teammate or engine is
-running.** In this order:
+### When an answer does not come — idle check
 
-1. **Flush first.** Every `TO:` message you received but never forwarded (no `relay.log` line) —
-   forward and log it now. Forwarding an answer closes the request it answers.
-2. **Then resend what is still open**, skipping any recipient marked `STOOD_DOWN` in state.md (close
-   those with `CLOSED:` instead) and any name mid-rotation (its requests are held for the successor).
-   Keep the envelope intact — the resend must look like the original with one extra line:
-   `FROM: <original sender>\nRESEND:\n<original body>` (for Lead's own requests: `RESEND:\n<body>`).
-3. Only a recipient that ignores a resend is treated as stuck (phase2-monitoring.md).
+Nothing wakes a team in which every member has ended its turn. So before Lead ends a turn while
+work is unfinished and **no teammate or engine is running**:
 
-A teammate that receives a `RESEND:` for something it already answered sends the same answer again —
-no new review.
+1. Deliver every `OPEN` line in `pending.log` (as above).
+2. For every task `IN_REVIEW` or `IN_PROGRESS` in PLAN.md whose coder is idle, send the coder
+   `STATUS?`. It answers what it is waiting for and quotes the unanswered request in full. If it
+   waits for a review or a ruling, resend that request yourself: `RESEND: from coder-N` + the quoted
+   body. Do the same for any instruction of yours still unanswered (a ROTATION without DONE, a round
+   without its answer): send it again.
+3. Only a teammate that ignores a `RESEND:` or a `STATUS?` is treated as stuck (phase2-monitoring.md).
+
+This check costs nothing on a healthy run: a team with a message in flight always has someone
+running, and a team where everyone is idle with work left has lost something.
 
 ## 4. Ending the run
 
@@ -192,5 +171,5 @@ There is no team to delete. At shutdown:
 ## 5. Separate-process teammates (tmux / iTerm2) — untested
 
 With `--teammate-mode tmux` or `iterm2` every teammate is its own process and may idle instead of
-finishing, so teammate-to-teammate delivery could work there. This has not been measured. Keep lead
-relay in that mode too until someone verifies that a message to an idle teammate is delivered.
+finishing. This has not been measured. The rules above still hold, because they key off the tool
+result, not the mode: `queued` always means "hand Lead a copy".

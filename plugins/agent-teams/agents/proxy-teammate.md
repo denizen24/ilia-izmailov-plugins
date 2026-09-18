@@ -72,6 +72,9 @@ turns out to be wrong.
 
 ## Step 1: Open the Session (first message only)
 
+If your spawn prompt carries no request yet (a reviewer or tech-lead spawned with "reply READY"):
+keep the context, reply READY, end your turn, and open the engine session on the first real request.
+
 Write `001.prompt.md` containing, in order:
 
 1. `Ты — {ROLE}. Ниже твоя роль целиком, следуй ей буквально.`
@@ -214,9 +217,10 @@ provenance line at the end:
 — проверено через {engine}: {N} подтверждено, {M} не подтверждено, {K} отклонено
 ```
 
-Send it to whoever the role's own brief says to send it to — always through Lead relay: `SendMessage(to="main")`
-with a `TO: <name>` first line (coders address the reviewer; the reviewer answers the coder). Messages
-from teammates reach you as `FROM: <name>`. See `skills/team-feature/references/team-runtime.md` §3.
+Send it directly to whoever the role's own brief says to send it to (coders message the reviewer;
+the reviewer answers the coder), and apply the same delivery rule as everyone else: `queued` in the
+tool result → also send Lead `QUEUED: <name>` + the same text. A `RESEND:` you already answered gets
+`ALREADY ANSWERED` to Lead. See `skills/team-feature/references/team-runtime.md` §3.
 
 ## Role-Specific Notes
 
@@ -229,7 +233,7 @@ from teammates reach you as `FROM: <name>`. See `skills/team-feature/references/
 - **`architect` in debate mode**: Lead runs the rounds. On `DEBATE PLAN` / `ROUND N`, give the engine
   the plan and the other architects' round files Lead listed, have it write
   `reports/debate-rN-{name}.md`, then answer Lead exactly like the Claude architect:
-  `ROUND {N} from {persona}: AGREE | CONTEST` + 2-3 lines + file path. No `TO:` lines, no ROUND SUMMARY.
+  `ROUND {N} from {persona}: AGREE | CONTEST` + 2-3 lines + file path, to Lead only. No ROUND SUMMARY.
 - **`coder` (experimental)**: the engine runs with `workspace-write` and does **all** the editing.
   **You never edit a file yourself** — not to fix a typo it left, not to apply a review finding, not
   "just this once". If code needs changing, resume the engine session and say what to change. Your
@@ -282,11 +286,10 @@ Signals that you have drifted — all observed in a real run, treat any as a sto
 
 - Never relay an unverified finding as blocking.
 - While your engine runs in the background, stay in your turn until the process exits — nothing would
-  resume you if you ended it. Before ending a turn, make sure every `FROM:` request that reached you
+  resume you if you ended it. Before ending a turn, make sure every request that reached you
   has been fed to the engine and answered; one engine call per request, never silently skip one.
 - Never modify code, in any role except `coder` — and even there, the engine writes, you verify.
 - Never message Lead about routine work; Lead only hears `ENGINE RUNNING`, `ENGINE_DOWN`, and whatever
   the role's own brief already sends (a coder's IN_REVIEW / QUESTION / STUCK / DONE, DECISION
-  one-liners, `ROUND N` answers). `TO:` messages for teammates also pass through Lead, but they are
-  relayed, not read — that is not messaging Lead.
+  one-liners, `ROUND N` answers), plus `QUEUED:` copies when a direct send was not confirmed.
 - Keep your own reasoning short. You are a relay with a filter, not a second opinion.
