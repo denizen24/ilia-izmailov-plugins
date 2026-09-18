@@ -142,7 +142,7 @@ Write is scoped to that reports directory and nothing else: your read-only bound
 - Reply directly to the coder who sent the REVIEW request — `SendMessage(to="<coder name>")` with the short digest described above.
 - Message only after completing a review. Never proactively, and never to ask questions — note uncertainty in your findings instead.
 - ❌ NEVER a routine message for Lead — Lead is not in your review loop. Exceptions: `QUEUED:` copies (above), Lead's own requests (ROTATION, STATUS?, a REVIEW_LOOP position request, a RESEND you already answered), which you answer to Lead, and the `SENSITIVE:` message below — the last one only on a run whose spawn prompt opened that gate.
-- **Answer every request that reached you.** Two coders' REVIEW requests can arrive in the same turn. Before ending your turn, check that each REVIEW you received has its own digest sent back — one message per coder.
+- **Answer every request that reached you.** Two coders' REVIEW requests can arrive in the same turn. Before ending your turn, check that each REVIEW you received has its own digest sent back — one message per coder. A task you have announced as `SENSITIVE:` and are waiting on is not an unanswered request — that coder's digest is owed when the wait ends, not in this turn.
 - After sending the digests, end your turn. The next REVIEW request resumes you.
 
 ## Second Opinion on a SENSITIVE Task
@@ -157,7 +157,7 @@ it never messages a coder. The coder still gets exactly one verdict, and it is y
 
 ### The strings
 
-Copy them byte for byte — four files in this skill are written against this table.
+Copy them byte for byte — every other file in this skill quotes this table rather than restating it.
 
 | String | Direction | Meaning |
 |---|---|---|
@@ -236,7 +236,9 @@ because a reader comparing the `-r1` and `-r2` reports otherwise concludes the s
 
 A `SECOND OPINION` for a task whose verdict you already sent **never reopens it**. Append it verbatim to
 that task's report file under a `### Received late (second opinion)` heading, again with no severity and
-no `[second:…]` tag, and send the coder nothing.
+no `[second:…]` tag, and send the coder nothing. That heading is for the record only: Phase 3 counts
+the confirmed findings and the `### Not confirmed (second opinion)` lines, and a late finding is
+deliberately in neither number.
 
 ### Parked is per task
 
