@@ -67,8 +67,9 @@ Every round message from Lead has no `FROM:` line; answer it to Lead with no `TO
 
 When you receive "DEBATE PLAN" (round 1) or "ROUND {N}" from Lead:
 
-1. **Read the plan** — `.claude/teams/{team-name}/tasks.md`. From round 2 on, also read the other
-   architects' files from the previous round (Lead lists the paths).
+1. **Read the plan** — `.claude/teams/{team-name}/PLAN.md`. Read-only: agreed changes go to Lead in
+   your SPEC APPROVED message. From round 2 on, also read the other architects' files from the
+   previous round (Lead lists the paths).
 2. **Read CLAUDE.md and .conventions/** (if exists) for project context.
 3. **Write your critique to a file** — `.claude/teams/{team-name}/reports/debate-r{N}-{your-name}.md`.
    The file is the only place where the argumentation survives — DECISIONS.md keeps only the conclusion.

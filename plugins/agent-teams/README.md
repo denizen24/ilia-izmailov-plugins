@@ -34,7 +34,7 @@ offers `TaskCreate` / `TaskList` only to some models (not to Opus 5 by default).
 teammate to another whose turn has already finished is reported as sent and never delivered. So the
 plugin:
 
-- keeps the plan in `.claude/teams/<team>/tasks.md`, owned by Lead;
+- keeps the plan in `.claude/teams/<team>/PLAN.md`, owned by Lead;
 - routes every teammate-to-teammate message through Lead: the sender writes `TO: <names>` on the
   first line, Lead forwards it verbatim and never reads the code it points to;
 - ends a run by stopping whatever is still running — there is no team to delete.
@@ -155,7 +155,7 @@ For complex features, 3 specialized Architects settle the specification before a
 5. **Handover** — each architect writes a ≤25-line review brief for its domain: what a reviewer must
    check in this feature, the traps found during the debate, which boundaries deserve suspicion
 6. **Stand down** — all three architects shut down, Primary included. The briefs go into the
-   reviewer's prompt, and the reviewer does the code review from Phase 2 on.
+   reviewer's prompt, and the reviewer (unified-reviewer) does the code review from Phase 2 on.
 
 **Why they leave.** An architect is cheap in debate and expensive in review, because by review time it
 carries the whole debate transcript. Measured on real runs: an architect's debate turn cost ~36k
@@ -181,7 +181,9 @@ Coders receive their task along with gold standard examples — real files from 
 Each coder lives exactly one task. Task history helps nobody but is re-read on every remaining turn,
 so carrying it is pure cost; anything genuinely worth passing on goes in the handover note.
 
-**The reviewer rotates too** — every three completed tasks, at task boundaries only.
+**The reviewer rotates too** — every three completed tasks, without waiting for a quiet moment:
+the retiring reviewer finishes the review it is on, and Lead re-forwards every other open request
+to the successor from `relay.log`.
 The retiring reviewer leaves a ≤15-line standing-findings note (what repeated across tasks, what is
 already settled) and the replacement takes the same name, so coders' rosters stay valid. Without
 rotation, the reviewer accumulates every review of every task and becomes the most expensive agent
@@ -213,7 +215,7 @@ consistency (Tech Lead on MEDIUM, a one-shot checker otherwise) and the verifier
 
 **Step 1 — Conventions Update**
 
-A dedicated conventions task (blocked by all coding tasks) creates/updates `.conventions/` with patterns discovered during implementation, recurring review issues, and approved deviations.
+A dedicated conventions task (the last task in PLAN.md; Lead spawns it only here, after every coding task is committed) creates/updates `.conventions/` with patterns discovered during implementation, recurring review issues, and approved deviations.
 
 **Step 2 — Integrated Verification**
 
@@ -267,8 +269,9 @@ These conventions are used by `/team-feature` as few-shot examples for coders. R
 |----------|-----------|---------|
 | `.conventions/` | Conventions task | Gold standards, anti-patterns, automated checks for future runs |
 | `DECISIONS.md` | Tech Lead (MEDIUM); on COMPLEX Primary Architect during planning, then Lead | Architectural decisions, approved deviations, debate summary |
-| `VERIFICATION_PLAN.md` | Lead / Architects | Checklist of automated and manual checks |
+| `VERIFICATION_PLAN.md` | Lead (on COMPLEX, from the architects' checks) | Checklist of automated and manual checks |
 | `VERIFICATION_REPORT.md` | Verification phase | Detailed results with pass/fail/skip per check |
+| `PLAN.md` | Lead (only writer) | The task list: every task with files, criteria, blockers and status. Lead hands each task to a coder in its spawn prompt — no Claude Code task tools needed |
 | `state.md` | Lead | Team state for compaction recovery |
 
 ## Team Roles
