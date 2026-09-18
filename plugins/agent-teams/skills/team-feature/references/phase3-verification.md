@@ -231,7 +231,7 @@ Save report to `.claude/teams/{team-name}/VERIFICATION_REPORT.md`
 Read(".claude/teams/{team-name}/LEGACY_REPORT.md")
 ```
 
-Coders appended entries here during Step 5.5 of their workflow. Parse all `## [task #N] ...` entries into a list.
+Coders appended entries here during Step 4.5 of their workflow. Parse all `## [task #N] ...` entries into a list.
 
 ### 6b. Run a safety scan for legacy coders missed
 

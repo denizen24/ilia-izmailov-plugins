@@ -181,7 +181,9 @@ Coders receive their task along with gold standard examples — real files from 
 Each coder lives exactly one task. Task history helps nobody but is re-read on every remaining turn,
 so carrying it is pure cost; anything genuinely worth passing on goes in the handover note.
 
-**The reviewer rotates too** — every three completed tasks, at task boundaries only.
+**The reviewer rotates too** — every three completed tasks, without waiting for a quiet moment:
+the retiring reviewer finishes the review it is on, and Lead re-forwards every other open request
+to the successor from `relay.log`.
 The retiring reviewer leaves a ≤15-line standing-findings note (what repeated across tasks, what is
 already settled) and the replacement takes the same name, so coders' rosters stay valid. Without
 rotation, the reviewer accumulates every review of every task and becomes the most expensive agent
@@ -213,7 +215,7 @@ consistency (Tech Lead on MEDIUM, a one-shot checker otherwise) and the verifier
 
 **Step 1 — Conventions Update**
 
-A dedicated conventions task (blocked by all coding tasks) creates/updates `.conventions/` with patterns discovered during implementation, recurring review issues, and approved deviations.
+A dedicated conventions task (the last task in PLAN.md; Lead spawns it only here, after every coding task is committed) creates/updates `.conventions/` with patterns discovered during implementation, recurring review issues, and approved deviations.
 
 **Step 2 — Integrated Verification**
 
@@ -267,7 +269,7 @@ These conventions are used by `/team-feature` as few-shot examples for coders. R
 |----------|-----------|---------|
 | `.conventions/` | Conventions task | Gold standards, anti-patterns, automated checks for future runs |
 | `DECISIONS.md` | Tech Lead (MEDIUM); on COMPLEX Primary Architect during planning, then Lead | Architectural decisions, approved deviations, debate summary |
-| `VERIFICATION_PLAN.md` | Lead / Architects | Checklist of automated and manual checks |
+| `VERIFICATION_PLAN.md` | Lead (on COMPLEX, from the architects' checks) | Checklist of automated and manual checks |
 | `VERIFICATION_REPORT.md` | Verification phase | Detailed results with pass/fail/skip per check |
 | `PLAN.md` | Lead (only writer) | The task list: every task with files, criteria, blockers and status. Lead hands each task to a coder in its spawn prompt — no Claude Code task tools needed |
 | `state.md` | Lead | Team state for compaction recovery |

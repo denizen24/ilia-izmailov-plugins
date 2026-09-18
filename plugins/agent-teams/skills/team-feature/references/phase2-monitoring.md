@@ -23,7 +23,7 @@ Feed rules: user's language, product terms, one entry per event, always include 
 
 ## Task-Done Digest
 
-Coders' DONE messages carry a SUMMARY / REVIEW / EDGE CASES block (see coder.md Step 9). Print it as a compact digest:
+Coders' DONE messages carry a SUMMARY / REVIEW / EDGE CASES block (see coder.md Step 8). Print it as a compact digest:
 
 ```
 ✅ {done}/{total} done: {what now works, product language} ({N} review round(s))
@@ -109,7 +109,8 @@ reviewer doing all the reviews, it fills up three times as fast.
 
 **Rotate the reviewer every 3 completed tasks.** Do not wait for a moment with no review in
 flight — with several coders in parallel that moment may never come. The reviewer finishes the
-review it is on, and anything that arrives during the handover is re-sent (step 3).
+review it is on; every other request still open in `relay.log` — owed before the rotation or
+arrived during the handover — goes to the successor as `RESEND:` (step 3).
 
 1. SendMessage to unified-reviewer:
    ```
@@ -131,8 +132,9 @@ review it is on, and anything that arrives during the handover is re-sent (step 
    {contents of reports/standing-unified-reviewer-*.md — all of them, 15 lines each}
    --- END ---
    ```
-   If a coder's REVIEW request arrived during the handover, re-forward it to the successor with
-   `RESEND:` — `relay.log` shows it as open. The coder does not re-send.
+   Then re-forward to the successor, as `RESEND:`, every request to unified-reviewer still open in
+   `relay.log` — the ones the retiring reviewer did not answer and the ones that arrived during the
+   handover. The coders do not re-send.
 4. 📢 `🔄 Ревьюер сменился — новый принял смену, накопленные наблюдения переданы.`
 
 The successor starts near 100k instead of 350k. What is lost is the memory of individual past
@@ -147,8 +149,9 @@ When a coder reports DONE:
 1. Set its task to DONE in PLAN.md.
 2. Find the tasks that are now available — Status TODO and every "Blocked by" task DONE.
 3. For each, while active coders < max: set it to `IN_PROGRESS(coder-N)` in PLAN.md, then spawn a
-   fresh coder with the **same prompt as Phase 1 Step 5** — roster from state.md, the task section
-   copied verbatim from PLAN.md, the gold standard block. If foreign changes were present at Step 5,
+   fresh coder with the **same prompt as Phase 1 Step 5** — roster from state.md with the `TO:`
+   instructions, the task section copied verbatim from PLAN.md, the handover notes of its blockers,
+   the gold standard block. If foreign changes were present at Step 5,
    re-run `git status --short` and repeat the FOREIGN CHANGES block, since the list may have grown.
    If the `coder` role is on an external engine per the `## Engines` section of state.md, spawn
    `agent-teams:proxy-teammate` with the same name and the coder role brief instead — see

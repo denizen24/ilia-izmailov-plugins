@@ -159,7 +159,7 @@ Execute these steps in order:
 
 2. **Dispatch researchers** (conditional) — adaptive: skip what's already known. Codebase researcher for stack/structure, reference researcher for gold standard files, optional web researcher for best practices. Skip all if `--no-research` or brief provides everything.
 
-3. **Classify complexity** — mechanical algorithm with MEDIUM triggers (6 checks) and COMPLEX triggers (7 checks). Not overridable. Pick the team name, write VERIFICATION_PLAN.md (SIMPLE/MEDIUM) or defer to architects (COMPLEX). Compile gold standard block for coders. Write PLAN.md — every task with acceptance criteria + convention checks. Lead is its only writer.
+3. **Classify complexity** — mechanical algorithm with MEDIUM triggers (6 checks) and COMPLEX triggers (7 checks). Not overridable. Pick the team name, write VERIFICATION_PLAN.md (SIMPLE/MEDIUM) or, on COMPLEX, compile it after the architect debate from their checks. Compile gold standard block for coders. Write PLAN.md — every task with acceptance criteria + convention checks. Lead is its only writer.
 
 4. **Validate plan** — SIMPLE: skip. MEDIUM: Tech Lead validates. COMPLEX: 3 Architects debate in Lead-run rounds (max 3), converge, one becomes Primary Architect, Lead compiles VERIFICATION_PLAN.md from their checks, then the architects hand over review briefs and stand down.
 
