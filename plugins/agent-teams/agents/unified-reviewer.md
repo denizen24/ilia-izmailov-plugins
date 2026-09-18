@@ -182,6 +182,12 @@ several tasks at once, so the second line is what tells you which one the answer
    own pass.
 2. **End your turn.** Lead answers at once and the answer resumes you. Staying in your turn to wait is
    what puts that answer in the `queued` state, where it is lost.
+   **If your own `SENSITIVE:` send came back `queued`, do not park on it.** The ordinary remedy — hand
+   Lead a copy — is empty here, because Lead was the recipient. Review the task alone and send that
+   coder its verdict, exactly as on `SECOND REVIEWER: none`. You lose one optional opinion on one task;
+   parking on a message that may never have arrived costs that coder the whole run. A `SECOND REVIEWER:`
+   for that task arriving later is a nudge, not a resume signal — handle it as an answer naming a task
+   you are not parked on, below.
 3. On `SECOND REVIEWER: none` for that task — review it alone and send the coder your digest, as always.
 4. On `SECOND REVIEWER: <engine>` for that task — do your own full pass anyway and write your report
    file, then wait for `SECOND OPINION: task #N` before you send the coder anything. **End your turn
@@ -207,6 +213,11 @@ surroundings, and construct the scenario. Then split them.
 
 - **Confirmed** — into your report under its severity, in your normal line format plus the tag:
   `- [confidence:HIGH] [second:codex] src/api/orders.ts:88 — [logic] …`
+- **Both of you found it** — the finding is already in your report from your own pass. Leave it exactly
+  as it is: **no `[second:…]` tag, no second line.** The tag means "this came from the second opinion",
+  and putting it on a conclusion you reached yourself is the dishonesty this whole mechanic exists to
+  avoid — it would also count twice in Phase 3. Agreement is not a finding; it is worth nothing to the
+  coder and the report should not pretend otherwise.
 - **Not confirmed** — one line and one short reason each, under a `### Not confirmed (second opinion)`
   heading placed **below** the report's existing footer line:
 
@@ -218,9 +229,12 @@ Fix CRITICAL and MAJOR before committing. MINOR is optional.
 - codex src/api/orders.ts:88 — race between the check and the write. Not confirmed: both calls are inside the same transaction, line 74.
 ```
 
-No CRITICAL/MAJOR/MINOR and no `[confidence:…]` token in that section, ever. Phase 3 counts findings by
-category out of these report files, and a severity-shaped line there would add a claim you rejected to
-the security and logic counts.
+No CRITICAL/MAJOR/MINOR, no `[confidence:…]`, **no `[security]` / `[logic]` / `[quality]` category tag
+and no `[second:…]` tag** in that section, ever. Phase 3 counts the Security / Logic / Quality figures
+**by category tag** and the confirmed second-opinion figure by `[second:`, both by grep over these
+report files — so it is the category tag, not the severity word, that would add a claim you rejected to
+the Logic count. Write the engine name as bare text, as in the example above, and keep every bracketed
+token out.
 
 Rewrite the report file with the folded findings **before** you message anyone — file first, message
 second, exactly as above. The coder is told about a confirmed finding once, in the one digest that ends

@@ -138,7 +138,7 @@ SendMessage(to="<name>", message="RESEND: from <sender>\n<the body, verbatim>")
 - Forward verbatim — no summarising, no editing.
 
 **Lead's own messages follow the same rule.** VALIDATE PLAN, DEBATE PLAN, ROUND N, FINAL, IDENTIFY
-RISKS, ROTATION, ROSTER UPDATE, STATUS?: if the result is `queued`, add a pending.log line with
+RISKS, ROTATION, ROSTER UPDATE, STATUS?, `SECOND REVIEWER:` (both the engine answer and `none`): if the result is `queued`, add a pending.log line with
 sender `lead` and send it again on that teammate's next completion notification. To avoid the case
 altogether, send Lead's first instruction to a freshly spawned teammate only after its `READY` — every
 long-lived teammate (reviewer, tech-lead, architects) is spawned with "reply READY and end your turn".
@@ -147,7 +147,18 @@ long-lived teammate (reviewer, tech-lead, architects) is spawned with "reply REA
 ### When an answer does not come — idle check
 
 Nothing wakes a team in which every member has ended its turn. So before Lead ends a turn while
-work is unfinished and **no teammate or engine is running**:
+work is unfinished and **no teammate or engine is running**.
+
+**`second-reviewer-{id}` does not count as running for this check.** Every other role produces
+something the run needs, so waiting for one is the right thing to do; a second opinion is optional by
+construction and its absence changes no verdict. Counting it would mean one instance that stops
+working without ending its turn — a hung engine call, a subagent turn that never returns — leaves the
+check disarmed for the rest of the run, and a reviewer parked on that task waits for something nobody
+is watching for. So: run this check whenever every teammate **other than** a `second-reviewer-{id}` is
+idle, and treat each line in `## Second opinions` per step 2 below. Cancelling a live instance costs
+the run one optional opinion on one task; not cancelling a dead one costs the run.
+
+Then:
 
 1. Deliver every `OPEN` line in `pending.log` (as above).
 2. For every task `IN_REVIEW` or `IN_PROGRESS` in PLAN.md whose coder is idle, send the coder

@@ -29,7 +29,7 @@ Canonical role IDs. These are the keys usable in the config `roles` block.
 | `architect` | teammate | Phase 1 Step 4c (COMPLEX) | claude, codex, kimi, grok, cursor |
 | `architect-frontend` / `architect-backend` / `architect-systems` | teammate | Phase 1 Step 4c | per-persona override of `architect` |
 | `unified-reviewer` | teammate | Phase 1 Step 5 (every level) | claude, codex, kimi, cursor |
-| `second-reviewer` | teammate, per task (`second-reviewer-{task id}`) | Phase 2, on demand (SENSITIVE task) | claude, codex, kimi, grok, cursor — **absent = off** |
+| `second-reviewer` | teammate, per task (`second-reviewer-{task id}`) | Phase 2, on demand (SENSITIVE task) | claude, codex, kimi, cursor — **absent = off** |
 | `coder` | teammate | Phase 1 Step 5, Phase 2 | claude, codex **(experimental)** |
 
 `second-reviewer` is the one exception: it is off unless you list it. It gives a second *opinion*,
@@ -461,6 +461,11 @@ source code exactly as it says; the only file you write is the findings file nam
 - Write your findings to .claude/teams/{team-name}/reports/review-task{id}-second-r{round}.md first,
   then send `SECOND OPINION: task #N` to `unified-reviewer`. That file is your record of this task.
 - `unified-reviewer` is the only recipient you ever have. You never message a coder.
+- **Do not open `.claude/teams/*/reports/` — ever, for any task.** `unified-reviewer` has already
+  written its own review of this task there, and reading it is what this instance exists not to do:
+  an opinion that has seen the first one agrees with it, and the run then credits you for a
+  conclusion that was never yours. Read the changed files and the diff range, nothing else under
+  `.claude/`. If you have already opened one, say so in your findings instead of hiding it.
 - Then you are done — this instance lives for one task.
 ```
 
@@ -470,10 +475,12 @@ write it (`agents/proxy-teammate.md`).
 
 **The brief is also defined by what it leaves out.** It carries the task, the list of changed files
 and the diff range, and **nothing `unified-reviewer` produced**: no findings, no severities, no report
-file, no hint of what the first reviewer already suspects. Reading
-`reports/review-task{id}-unified-*.md` for the task under review is forbidden, and say so in the
-brief — a `read-only` sandbox does not enforce it, the engine can open those files perfectly well.
-An engine shown someone else's framing agrees with it; that is the whole reason for the rule.
+file, no hint of what the first reviewer already suspects. Reading the reports directory is forbidden,
+and **the contract block above says so in its own words — that bullet is not optional and is not a
+summary of this paragraph, it is the only place the instruction actually reaches the reader.** A
+`read-only` sandbox does not enforce it: the engine can open those files perfectly well, and on the
+`claude` path the instance is an ordinary subagent with `Read`. An engine shown someone else's framing
+agrees with it; that is the whole reason for the rule.
 
 **The findings file is part of the contract, not bookkeeping.** `review-task{id}-second-r{round}.md`
 is where `unified-reviewer` expects the findings to be recorded, and Phase 3 counts those files to
