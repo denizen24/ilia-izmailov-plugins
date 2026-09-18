@@ -206,7 +206,10 @@ Every task, at every complexity level, passes two gates before commit:
 | **Quality** | DRY violations, unclear naming, wrong abstractions, dead code |
 
 When a task touches auth, payments, migrations or shared infrastructure, the reviewer goes deeper
-on its own — it traces every path from user input to storage and response.
+on its own — it traces every path from user input to storage and response, and it marks the task
+SENSITIVE. A SENSITIVE task can also be read by `second-reviewer` — a second *opinion*, not a second
+verdict — on a different engine, if you configured one: its findings go to the reviewer, which still
+issues the single verdict the coder gets. See Engines below.
 
 Everything that needs the whole feature in view is checked once, at the end: cross-task
 consistency (Tech Lead on MEDIUM, a one-shot checker otherwise) and the verifiers in Phase 3.
@@ -285,6 +288,7 @@ These conventions are used by `/team-feature` as few-shot examples for coders. R
 | **Architect** | Debate only (COMPLEX) | Debates spec in Lead-run rounds, writes a domain review brief, stands down. 3 personas: Frontend, Backend, Systems |
 | **Coder** | Per task | Implements matching gold standards, self-checks, requests review directly from the reviewer |
 | **Unified Reviewer** | Permanent, rotated every 3 tasks | The one per-task review: security, logic, fit with the plan, quality |
+| **Second Reviewer** (optional) | One SENSITIVE task, on demand (`second-reviewer-{id}`, opt-in) | A different engine's findings with `file:line`, to the Unified Reviewer only — never a verdict, never to a coder |
 | **Risk Tester** | One-shot | Verifies specific risks by reading code and running test scripts |
 | **CI Verifier** | One-shot | Runs build, typecheck, lint, tests — reports PASS/FAIL/BROKEN |
 | **Browser Verifier** | One-shot | Navigates pages, checks elements and interactions via Chrome |
@@ -295,6 +299,7 @@ These conventions are used by `/team-feature` as few-shot examples for coders. R
 
 **Every role runs on Claude by default. With no config file, nothing here applies** — the pipeline
 behaves exactly as documented above.
+`second-reviewer` is the one exception: it is off unless you list it.
 
 If you have other coding CLIs installed, you can reassign individual roles to them. Work moved out
 bills against that tool's subscription instead of your Claude context and rate limit. Codex in
@@ -335,6 +340,18 @@ What the proxy does and does not do:
 - It triages every finding against the cited lines before relaying it, because external engines
   over-report.
 
+**Optional depth on SENSITIVE tasks.** When the reviewer marks a task SENSITIVE and you have
+configured a `second-reviewer` on a different engine, that engine reads the same task and sends its
+findings to the reviewer — never to the coder. The reviewer checks each finding against the actual
+lines, drops what it cannot confirm, and folds the rest into its own single verdict, marked
+`[second:<engine>]`. The gate count does not change: one reviewer, one verdict.
+With no `second-reviewer` configured — the default — none of this happens.
+
+A second opinion means a second vendor's model reads the changed files of your most sensitive
+tasks — auth, payments, migrations. That is the point of it, and it is worth knowing before you
+switch it on. Turn it on if that trade is one you want: it costs one extra engine run per SENSITIVE
+task, billed against that engine's own subscription, and it can never block a task on its own.
+
 Guarantees that hold regardless of configuration:
 
 - `lead` and `browser-verifier` always run on Claude (team ownership; Chrome extension).
@@ -342,6 +359,8 @@ Guarantees that hold regardless of configuration:
   says so in the progress feed. Set `"fallback": "fail"` if you would rather the run stop.
 - External output is never trusted as-is: findings are verified against the cited lines before they
   block a task, and verifier reports must quote real command output.
+- A second reviewer never issues a verdict: it hands findings to the one reviewer, which verifies
+  them against the cited lines before any of them can reach a coder.
 - Decisions stay on the Claude side — engines produce findings, not approvals.
 - `--engines=off` on a single run ignores the config entirely.
 
