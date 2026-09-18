@@ -34,7 +34,7 @@ offers `TaskCreate` / `TaskList` only to some models (not to Opus 5 by default).
 teammate to another whose turn has already finished is reported as sent and never delivered. So the
 plugin:
 
-- keeps the plan in `.claude/teams/<team>/tasks.md`, owned by Lead;
+- keeps the plan in `.claude/teams/<team>/PLAN.md`, owned by Lead;
 - routes every teammate-to-teammate message through Lead: the sender writes `TO: <names>` on the
   first line, Lead forwards it verbatim and never reads the code it points to;
 - ends a run by stopping whatever is still running — there is no team to delete.
@@ -155,7 +155,7 @@ For complex features, 3 specialized Architects settle the specification before a
 5. **Handover** — each architect writes a ≤25-line review brief for its domain: what a reviewer must
    check in this feature, the traps found during the debate, which boundaries deserve suspicion
 6. **Stand down** — all three architects shut down, Primary included. The briefs go into the
-   reviewer's prompt, and the reviewer does the code review from Phase 2 on.
+   reviewer's prompt, and the reviewer (unified-reviewer) does the code review from Phase 2 on.
 
 **Why they leave.** An architect is cheap in debate and expensive in review, because by review time it
 carries the whole debate transcript. Measured on real runs: an architect's debate turn cost ~36k
@@ -269,6 +269,7 @@ These conventions are used by `/team-feature` as few-shot examples for coders. R
 | `DECISIONS.md` | Tech Lead (MEDIUM); on COMPLEX Primary Architect during planning, then Lead | Architectural decisions, approved deviations, debate summary |
 | `VERIFICATION_PLAN.md` | Lead / Architects | Checklist of automated and manual checks |
 | `VERIFICATION_REPORT.md` | Verification phase | Detailed results with pass/fail/skip per check |
+| `PLAN.md` | Lead (only writer) | The task list: every task with files, criteria, blockers and status. Lead hands each task to a coder in its spawn prompt — no Claude Code task tools needed |
 | `state.md` | Lead | Team state for compaction recovery |
 
 ## Team Roles

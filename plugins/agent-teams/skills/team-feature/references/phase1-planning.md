@@ -206,9 +206,10 @@ This means: 3 architects debate the plan first, up to 5 coders, risks get verifi
 
 (For SIMPLE: "⚖️ Complexity: SIMPLE — one coder + one reviewer, no risk analysis. Fast lane.")
 
-Now plan. Pick the team name `feature-<short-name>` — it names the run directory
-`.claude/teams/{team-name}/`. There is no `TeamCreate`: the team is implicit and exists as soon as the
-first teammate is spawned (`team-runtime.md` §1).
+Now plan. Pick the run directory `.claude/teams/feature-<short-name>/` — `{team-name}` below is
+`feature-<short-name>`. There is no team to create: Claude Code keeps one implicit team per session,
+and named agents join it when spawned (`team-runtime.md` §1). Writing the first file creates the
+directory.
 
 ### VERIFICATION_PLAN.md Template
 
@@ -264,7 +265,7 @@ How to populate: Definition of Done from technical quality bar + CLAUDE.md, Busi
 
 **Human Checks quality bar — no vague items allowed.** If tasks touch deploy config, infrastructure, billing, background jobs (pg-boss, queues), database migrations, auth middleware, or anything that only shows up at runtime, every Human Check must follow the template above, plus a failure pattern to reject (e.g., "no `ECONNREFUSED to db-02` in last 10 min"). Vague placeholders like "deploy and verify it works" are banned.
 
-**For COMPLEX** — skip writing VERIFICATION_PLAN.md here. Architects populate it during the debate phase (Step 4c) — each adds checks from their domain expertise.
+**For COMPLEX** — skip writing VERIFICATION_PLAN.md here. Architects send checks from their domain during the debate (Step 4c), and Lead compiles the file from them.
 
 Sections are optional — omit empty sections. Section names are fixed keywords used for parsing during Phase 3 verification.
 
@@ -288,20 +289,28 @@ GOLD STANDARD BLOCK (compiled by Lead):
 
 Keep this block to 3-5 examples, ~100-150 lines total. Prioritize by relevance to the feature.
 
-### Task Creation Template
+### PLAN.md — the Task List
 
-Write every task into `.claude/teams/{team-name}/tasks.md` — the single task list (`team-runtime.md`
-§2). Do not use `TaskCreate`: current Claude Code offers it only to some models. One section per
-task, with gold standard context from researcher findings:
+The plan lives in one file, **`.claude/teams/{team-name}/PLAN.md`**, and **Lead is its only
+writer** (`team-runtime.md` §2). There is no shared task tool — current Claude Code offers
+`TaskCreate` only to some models: Lead hands each task to a coder in the coder's spawn prompt,
+and marks it done when the coder reports DONE. Tech Lead and architects read PLAN.md and send
+changes to Lead; they never edit it.
 
 ```
-## #1 Add settings API endpoint
-Blocked by: —
+Write(".claude/teams/{team-name}/PLAN.md"):
 
-Create GET/PUT /api/settings endpoint.
+# Plan — feature-{short-name}
 
+Status values: TODO → IN_PROGRESS(coder-N) → IN_REVIEW(coder-N) → DONE. Only Lead edits this file.
+
+## Task 1: Add settings API endpoint
+Status: TODO
+Blocked by: none
 Files to create/edit: src/server/routers/settings.ts
 Reference files (read for patterns): src/server/routers/profile.ts, src/server/routers/account.ts
+
+Description: Create GET/PUT /api/settings endpoint.
 
 Acceptance criteria:
 - GET returns current user settings
@@ -320,32 +329,37 @@ Tooling:
 - Type check: pnpm tsc --noEmit
 
 Feature DoD applies — see VERIFICATION_PLAN.md
+
+## Task 2: ...
 ```
 
-**Every task description MUST include:**
+**Every task MUST include:**
+- Status and Blocked by
 - Files to create/edit
 - Reference files (from researcher findings — existing files showing the pattern to follow)
 - Acceptance criteria
 - **Convention checks** — specific pass/fail rules for THIS task (naming, structure, imports)
 - Tooling commands (from researcher findings)
 
-**Always create a conventions task as the LAST task** (blocked by all other coding tasks):
+**Always add a conventions task as the LAST task.** It is not a coding task: Phase 2 never spawns
+it and it does not count toward "all coding tasks DONE" — Lead spawns it in Phase 3 Step 1.
 
 ```
-## #{last} Update .conventions/ with discovered patterns
-Blocked by: #1, #2, ... (every coding task)
+## Task {N}: Update .conventions/ with discovered patterns
+Status: TODO
+Blocked by: Phase 3 (spawned by Lead in Phase 3 Step 1)
 
-Run the /conventions command logic to create or update .conventions/.
+Description: Run the /conventions command logic to create or update .conventions/.
 
 Additional context from THIS session (use alongside codebase analysis):
-1. Issues reviewers flagged 2+ times (recurring = missing convention)
+1. Issues the reviewer flagged 2+ times (recurring = missing convention)
 2. New patterns this feature introduced
-3. Approved escalations (Tech Lead approved deviations from existing patterns)
+3. Approved escalations (approved deviations from existing patterns, see DECISIONS.md)
 
 This is NOT optional. Every /team-feature run must leave .conventions/ up to date.
 ```
 
-Every task starts UNASSIGNED; statuses go into the `## Tasks` section of state.md when you write it at Step 5. The conventions task is the LAST task — verification runs automatically in Phase 3 after all tasks complete.
+Verification runs in Phase 3 after all tasks are DONE.
 
 **"Last" means after the code is committed, not merely after the code is written.** The conventions
 task quotes the tree — `file:line`, counts, "the project never does this" — and every one of those
@@ -378,14 +392,14 @@ Definition of Done: {DoD from Step 3}
 CODEBASE CONTEXT (from research):
 {Paste codebase-researcher findings: tech stack, project structure, relevant existing code}
 
-Wait for my instructions (VALIDATE PLAN, IDENTIFY RISKS, escalations, CROSS-TASK CHECK)."
+Wait for my instructions (VALIDATE PLAN, IDENTIFY RISKS, RISK ANALYSIS RESULTS). During coding you get only escalations and REVIEW_LOOP from coders, and CROSS-TASK CHECK from me at the end — you do not review tasks."
 )
 ```
 
 Then **validate the plan**:
 ```
 SendMessage to tech-lead:
-"VALIDATE PLAN: Please review the task list for this feature — .claude/teams/{team-name}/tasks.md.
+"VALIDATE PLAN: Please review the plan for this feature — .claude/teams/{team-name}/PLAN.md.
 Check task scoping, file assignments, dependencies, and architectural approach.
 
 Feature Definition of Done:
@@ -394,7 +408,7 @@ Feature Definition of Done:
 Reply PLAN OK or suggest changes."
 ```
 
-Wait for Tech Lead response. If they suggest changes → adjust tasks.md → re-validate.
+Wait for Tech Lead response. If they suggest changes → Lead edits PLAN.md → re-validate.
 
 **For COMPLEX:** Spawn 3 Architects and run specification debate.
 
@@ -424,8 +438,7 @@ Wait for DEBATE PLAN from Lead.")
 
 ```
 SendMessage to architect-frontend, architect-backend, architect-systems:
-"DEBATE PLAN: Review the task list for this feature from your expertise perspective.
-Task list: .claude/teams/{team-name}/tasks.md
+"DEBATE PLAN: Review the plan for this feature from your expertise perspective — .claude/teams/{team-name}/PLAN.md.
 
 Feature: {feature description}
 Feature Definition of Done: {DoD from Step 3}
@@ -477,7 +490,7 @@ Skip printing a round if nothing new was argued.
 
 After FINAL, wait for all 3 answers. If all are SPEC APPROVED:
 - Collect all recommendations
-- Apply agreed changes to task descriptions in tasks.md
+- Apply agreed changes to the tasks in PLAN.md
 - Designate the **most relevant architect as Primary** based on feature type:
   - Feature is mostly UI → architect-frontend is Primary
   - Feature is mostly API/DB → architect-backend is Primary
@@ -589,7 +602,7 @@ AskUserQuestion(
 - **Always show 2-3 options, never 1.** If there's only one viable option, don't ask — just do it.
 - **Explain trade-offs, not implementation details.** The user is deciding WHAT, not HOW. "Faster but harder to change later" > "Uses Redis pub/sub with TTL-based expiration."
 - **Include a "Your call" option** if the decision is purely technical and the user might not care.
-- **After user picks:** Update the relevant task descriptions in tasks.md with the chosen approach. Add the decision to DECISIONS.md if it exists.
+- **After user picks:** Update the relevant tasks in PLAN.md with the chosen approach. Add the decision to DECISIONS.md if it exists.
 - **Wireframes should be rough and fast** — box-drawing characters, simple text layout. Not art. Enough to see the structure.
 
 ## Step 4b: Risk Analysis (MEDIUM and COMPLEX only)
@@ -601,7 +614,7 @@ After plan validation (Tech Lead for MEDIUM, Architect debate for COMPLEX), run 
 1. **Tech Lead / Primary Architect identifies risks:**
    ```
    SendMessage to {tech-lead (MEDIUM) / primary architect (COMPLEX)}:
-   "IDENTIFY RISKS: Review the validated task list — what could go wrong during implementation?
+   "IDENTIFY RISKS: Review the validated plan in PLAN.md — what could go wrong during implementation?
    Focus on: data integrity, auth/security implications, breaking changes to existing features,
    integration points between tasks, missing edge cases, performance, external API contracts.
    For each risk, say what a risk tester should investigate in the codebase to verify it."
@@ -653,8 +666,8 @@ After plan validation (Tech Lead for MEDIUM, Architect debate for COMPLEX), run 
    ```
 
 4. **Lead applies recommendations:**
-   - If new tasks suggested → add them to tasks.md
-   - If reordering suggested → adjust the `Blocked by:` lines in tasks.md
+   - If new tasks suggested → add them to PLAN.md (before the conventions task)
+   - If reordering or new acceptance criteria suggested → edit PLAN.md (Blocked by, criteria)
    - If a risk requires user decision (e.g., "accept data loss during migration or add backward compatibility?") → notify user
    - 📢 Close the risk step with one line on what changed: `📝 Plan adjusted: +1 task (request queue), confirmed risks added to the verification checklist.` (If nothing changed: `📝 Plan unchanged — no confirmed risks required it.`)
    - **Update VERIFICATION_PLAN.md** — add confirmed risk mitigations to the "Risk Mitigation Checks" section:
@@ -769,7 +782,13 @@ The reviewer starts narrow (~90k) and stays narrow, which is the entire point of
 
 ### 2. Coders (up to --coders in parallel, uses `agents/coder.md`)
 
-**Enforcement:** Count available tasks. Spawn min(available_tasks, --coders) coders. Do NOT exceed --coders (default 5) at initial spawn.
+**Record the base commit first:** run `git rev-parse HEAD` and write it into state.md as
+`## Base Commit` — Phase 3 diffs the whole feature against it.
+
+**One coder = one task, handed over by Lead.** A task is *available* when its Status is TODO and
+everything in its "Blocked by" is DONE (the conventions task never is — it waits for Phase 3). Spawn one coder per available task, up to --coders
+(default 5). Before each spawn, set that task's Status in PLAN.md to `IN_PROGRESS(coder-N)` — the
+file is the only record of who works on what.
 
 **Before spawning, check what else is in the working tree.** Run `git status --short`. Any modified
 or untracked file that is NOT part of this feature belongs to someone else — another agent team, or
@@ -790,7 +809,7 @@ your commit by building the file's content from its committed version plus your 
 their edits stay out of your commit. Report it in your DONE digest.
 ```
 
-Tell each coder their team roster — the exact names it puts in `TO:` headers. One prompt template for all complexities — only the YOUR TEAM ROSTER block varies:
+Tell each coder their team roster — the exact names it puts in `TO:` headers. One prompt template for all complexities — only the YOUR TEAM ROSTER block and the task vary:
 
 ```
 Task(
@@ -807,14 +826,17 @@ YOUR TEAM ROSTER (address them with a TO: header — Lead relays, see your agent
 
 IMPORTANT: If DECISIONS.md exists at .claude/teams/{team-name}/DECISIONS.md — read it before starting. It contains architectural decisions, confirmed risks, and their mitigations that affect your implementation.
 
-YOUR TASK: #{id} — read its section in .claude/teams/{team-name}/tasks.md
-{Brief summary of what this coder will work on — from the task description}
+--- YOUR TASK ---
+{the whole "## Task {id}: ..." section from PLAN.md, copied verbatim}
+--- END TASK ---
+Full plan (read-only, for context on neighbouring tasks): .claude/teams/{team-name}/PLAN.md
+Handover notes from the tasks yours depends on: .claude/teams/{team-name}/reports/handover-task{blocker ids}.md — read them first.
 
 --- GOLD STANDARD EXAMPLES ---
 {GOLD STANDARD BLOCK compiled by Lead in Step 3}
 --- END GOLD STANDARDS ---
 
-Start working on task #{id}."
+Start working on your task."
 )
 ```
 
@@ -873,6 +895,7 @@ If you lost context after compaction, read this file.
 ## Phase: EXECUTION
 ## Complexity: {SIMPLE | MEDIUM | COMPLEX}
 ## Team Name: feature-{short-name}
+## Base Commit: {git rev-parse HEAD before the first coder}
 
 ## Phase 2 Instructions (EXECUTION)
 Your role: relay every TO: message verbatim and log it in relay.log (references/team-runtime.md §3), listen for DONE/STUCK/ESCALATE.
@@ -880,11 +903,12 @@ Your role: relay every TO: message verbatim and log it in relay.log (references/
 - DO NOT read code, run checks, pick reviewers, or edit relayed messages — coders drive their own review loop
 - Update this file after each event
 - Print a progress feed line to chat for each event — task digests, decisions, stuck reports (see phase2-monitoring.md event table). The user is watching the run live.
-- When ALL coding tasks show COMPLETED → change Phase to VERIFICATION and follow Phase 3 instructions below
+- On DONE: mark the task DONE in PLAN.md, then spawn a coder for every task that just became available
+- When every coding task in PLAN.md is DONE (the conventions task is not a coding task) → change Phase to VERIFICATION and follow Phase 3 instructions below
 
 ## Phase 3 Instructions (VERIFICATION) — follow step by step when Phase changes
 When you change Phase to VERIFICATION, execute IN ORDER (full details: references/phase3-verification.md):
-1. Conventions task — spawn a fresh coder for its task id (tasks.md), wait for DONE
+1. Conventions task — spawn a fresh coder for its task id (PLAN.md), wait for DONE
 2. Final checks — cross-task consistency via Tech Lead (MEDIUM) or a one-shot checker (SIMPLE/COMPLEX); verify .conventions/ exists
 3. Prepare verification plan — read VERIFICATION_PLAN.md, update with actual paths/endpoints
 4. Integrated verification — spawn ci-verifier + browser-verifier + spec-verifier in parallel, fix-verify loop for FAIL items (max 3 iterations), save VERIFICATION_REPORT.md
@@ -904,8 +928,7 @@ When you change Phase to VERIFICATION, execute IN ORDER (full details: reference
   (rotate the reviewer every 3 completed tasks — see phase2-monitoring.md "Rotating the Reviewer")
 
 ## Tasks
-(descriptions: tasks.md — this list holds status only, written by you)
-- #{id}: {subject} — {STATUS} ({assignment})
+Statuses live in PLAN.md (same directory) — the single task list. Do not copy them here.
 
 ## Active Coders: {N} (max: {M})
 ```

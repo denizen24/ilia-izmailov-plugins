@@ -278,10 +278,13 @@ The file serves as the **source of truth for user intent**. `/team-feature` read
 The brief already contains Project Context from Phase 0 researchers — no need for team-feature to re-research the codebase.
 
 ```
-Skill("team-feature", args=".briefs/[feature-name].md --no-research")
+Skill("team-feature", args=".briefs/[feature-name].md")
 ```
 
-This skips codebase-researcher (brief has project context) and reference-researcher (team-feature will check .conventions/ itself). If .conventions/ doesn't exist, team-feature will spawn only reference-researcher as needed.
+No `--no-research`: that flag skips ALL research, including the reference-researcher that finds the
+gold standards coders copy from. Without the flag, team-feature's Step 2 already skips the
+codebase-researcher because the brief carries project context, and runs the reference-researcher only
+if `.conventions/` does not cover the feature.
 
 ---
 

@@ -8,11 +8,11 @@ When all coding tasks are completed:
 
 📢 One line entering Phase 3: `🏁 Code is written. Wrapping up: updating project conventions, then running all checks.`
 
-The conventions task (the last section of tasks.md) should now be unblocked. Spawn a fresh coder for it — coders stand down after one task.
+Spawn a coder for the conventions task (the last task in PLAN.md) if it is still TODO — Phase 2 never spawns it.
 
 The coder receives the task description which tells them exactly what to create/update (signal sources are listed there). If `.conventions/` didn't exist before, bootstrap it with the key patterns researchers identified.
 
-The conventions task is tracked in tasks.md and state.md like any other task. It goes through the same review flow as Phase 2 (coder self-checks → unified-reviewer approves → commit).
+The conventions task is tracked in PLAN.md like any other task. It goes through the same review flow (coder self-checks → unified-reviewer approves → commit).
 
 After the conventions task is done, report what was created/updated in the summary.
 
@@ -48,7 +48,8 @@ Return a short list: file:line, what is inconsistent, which tasks disagree. Empt
 )
 ```
 
-Findings become fix tasks in the same fix-verify loop as everything else.
+Findings become fix tasks: add them to PLAN.md, spawn a coder per task, and after their DONE re-run
+this check once. What is still inconsistent after that goes to the report as an open item.
 
 **Never skip this step because the run looks clean.** It is the only check that sees two tasks at
 once, and parallel tasks break each other in ways no per-task reviewer can see. Measured on
@@ -64,7 +65,7 @@ Lead verifies before declaring done:
 Glob(".conventions/**/*")
 ```
 - If .conventions/ does not exist or was not modified during this session → **STOP. Feature is NOT complete.**
-- Go back to step 1 and run the conventions task. If it was never created → add it to tasks.md now and spawn a coder for it.
+- Go back to step 1 and run the conventions task. If it was never created → add it to PLAN.md now and spawn a coder for it.
 
 ## 4. Prepare VERIFICATION_PLAN.md
 
@@ -158,7 +159,7 @@ Report per check with evidence.")
 (If everything passed: `🧪 All {N} checks passed ✅.`)
 
 If there are **FAIL** items:
-1. Add targeted fix tasks to tasks.md based on failure evidence and spawn coders for them
+1. Add targeted fix tasks to PLAN.md based on failure evidence and spawn a coder per task
 2. Wait for coders to fix and commit
 3. Re-run ONLY the failed checks (spawn fresh verifiers for failed items only)
 4. **Hard cap: 3 iterations max.** Tag each iteration: "Verification run {N}/3: fixing {list}"
@@ -304,19 +305,20 @@ Then ask the user with **one AskUserQuestion call, one question per item** (max 
 
 For each item based on the user's choice:
 
-**"Delete" items** → create a single cleanup task bundling all delete items:
+**"Delete" items** → add a single cleanup task to PLAN.md bundling all delete items:
 ```
-## #{next} Cleanup legacy after feature completion
-Blocked by: —
+## Task {N}: Cleanup legacy after feature completion
+Status: TODO
+Blocked by: none
 
-Remove the following legacy items approved by user:
+Description: Remove the following legacy items approved by user:
 
 {list of items to delete with file:line and description}
 
 Do NOT remove anything not on this list. Run self-checks + request review as usual. Commit with: 'chore: cleanup legacy after {feature-name}'
 ```
 
-Append it to tasks.md and spawn a fresh coder for it. Wait for DONE. The reviewer must approve.
+Spawn a fresh coder for it (coders stand down after one task). Wait for DONE. The reviewer must approve.
 
 **"Later" items** → append to `.legacy-todo.md` at repo root (create the file if missing):
 ```
@@ -373,13 +375,14 @@ Runtime verification: {N/A if no human checks | PENDING — see Human Checks bel
 
 ## 8. Shutdown Team
 
-There is no team to delete (`team-runtime.md` §4).
+There is no team to delete (`team-runtime.md` §4) — the team is implicit and ends with the session.
 
 - Permanent teammates — all levels: unified-reviewer; MEDIUM: also tech-lead; COMPLEX: the
   architects already stood down in Phase 1.
 - Those whose turn has finished need nothing. Any still running: `SendMessage` with
   `{"type": "shutdown_request"}` or `TaskStop`, and confirm it stopped.
 - Mark every roster entry `STOOD_DOWN` in state.md.
+- Leave `.claude/teams/{team-name}/` in place: it is the record of the run.
 
 ## 9. Present Human Checks to User
 

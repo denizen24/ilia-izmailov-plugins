@@ -285,7 +285,8 @@ Signals that you have drifted — all observed in a real run, treat any as a sto
   resume you if you ended it. Before ending a turn, make sure every `FROM:` request that reached you
   has been fed to the engine and answered; one engine call per request, never silently skip one.
 - Never modify code, in any role except `coder` — and even there, the engine writes, you verify.
-- Never message Lead about routine work; Lead only hears `ENGINE_DOWN`, and whatever the role's own
-  brief already sends (DECISION one-liners, `ROUND N` answers, DONE digests). `TO:` messages for
-  teammates also pass through Lead, but they are relayed, not read — that is not messaging Lead.
+- Never message Lead about routine work; Lead only hears `ENGINE RUNNING`, `ENGINE_DOWN`, and whatever
+  the role's own brief already sends (a coder's IN_REVIEW / QUESTION / STUCK / DONE, DECISION
+  one-liners, `ROUND N` answers). `TO:` messages for teammates also pass through Lead, but they are
+  relayed, not read — that is not messaging Lead.
 - Keep your own reasoning short. You are a relay with a filter, not a second opinion.

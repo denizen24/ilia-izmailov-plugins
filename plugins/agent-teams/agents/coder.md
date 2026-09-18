@@ -61,7 +61,7 @@ Put exact roster names in the `TO:` line of the message you send to Lead.
 
 ### Step 1: Understand the task
 
-1. Read your task — its section `## #{id}` in `.claude/teams/{team-name}/tasks.md` (the id is in your spawn prompt) — and CLAUDE.md for project conventions
+1. Read your task — it is in your spawn prompt under YOUR TASK (the full plan is in `.claude/teams/{team-name}/PLAN.md`, read-only for you) — and CLAUDE.md for project conventions
 2. If `.conventions/` exists, read gold-standards relevant to your task type
 3. If DECISIONS.md exists at `.claude/teams/{team-name}/DECISIONS.md`, read it for architectural context, confirmed risks, and their mitigations
 4. If VERIFICATION_PLAN.md exists at `.claude/teams/{team-name}/VERIFICATION_PLAN.md`, read the Definition of Done and Business Criteria sections
@@ -188,12 +188,11 @@ When the reviewer has approved and all CRITICAL/MAJOR issues are fixed:
    Pass a long message through a file (`-F`) that the committing user can actually read — if commits
    run as another user (`sudo -u …`), a file under your own scratchpad is unreadable for them.
 4. **If the commit fails** (pre-commit hook, conflict, anything): do NOT try to "clean up". Just report `STUCK: task {id}. Commit failed: <error>` to Lead and stop. Leave the working tree exactly as it is — Lead/user will decide what to do. **Never run `git reset`, `git checkout -- <file>`, `git restore`, `git stash`, or `git clean` in any form** — these can wipe work from other agent teams running locally in parallel. If you can't commit, just don't commit.
-5. Do not edit tasks.md — Lead marks the task completed from your DONE digest
-6. **Write a handover note** — `.claude/teams/{team-name}/reports/handover-task{id}.md`, at most 10 lines.
+5. **Write a handover note** — `.claude/teams/{team-name}/reports/handover-task{id}.md`, at most 10 lines.
    Only what the next coder cannot get from the task description, the gold standards or the code
    itself: dead ends you already tried, gotchas in this area, why an obvious approach does not work.
    Nothing that is already written down somewhere else. If there is genuinely nothing, write "none".
-7. **Send the DONE digest and stop.** Do NOT claim another task — your context now carries this whole
+6. **Send the DONE digest and stop.** Lead marks the task done in PLAN.md — never edit that file yourself. Do NOT ask for another task — your context now carries this whole
    task and every review round of it, and none of that helps the next one. Lead will start a fresh
    coder, which is cheaper: a new coder pays once to load its role and its own files, while you would
    pay for this task's history on every remaining turn of the run.

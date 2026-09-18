@@ -51,18 +51,24 @@ teammates goes through the lead.**
 - If agent teams are switched off (no `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`, policy, older build),
   nothing below changes: background agents plus lead relay is the whole mechanism.
 
-## 2. The plan lives in `tasks.md`
+## 2. The plan lives in `PLAN.md`
 
-`.claude/teams/{team-name}/tasks.md` is the single task list. Do not use `TaskCreate` and friends
-even where they exist — a plan split between two stores drifts, and the tools vanish on model change.
+`.claude/teams/{team-name}/PLAN.md` is the single task list, and its statuses are the single task
+state. Do not use `TaskCreate` and friends even where they exist — a plan split between two stores
+drifts, and the tools vanish on model change.
 
 ```markdown
-# Tasks — feature-{name}
+# Plan — feature-{name}
 
-## #1 Add settings API endpoint
-Blocked by: —
-Files: src/server/routers/settings.ts
-Reference files: src/server/routers/profile.ts
+Status values: TODO → IN_PROGRESS(coder-N) → IN_REVIEW(coder-N) → DONE. Only Lead edits this file.
+
+## Task 1: Add settings API endpoint
+Status: TODO
+Blocked by: none
+Files to create/edit: src/server/routers/settings.ts
+Reference files (read for patterns): src/server/routers/profile.ts
+
+Description: ...
 Acceptance criteria:
 - ...
 Convention checks:
@@ -71,14 +77,16 @@ Tooling: test `pnpm vitest` · lint `pnpm biome check` · types `pnpm tsc --noEm
 Feature DoD applies — see VERIFICATION_PLAN.md
 ```
 
-- **Who writes:** Lead creates and edits tasks. Tech Lead (MEDIUM) and the Primary Architect
-  (COMPLEX, Phase 1 only) may edit the description of an existing task — acceptance criteria, risk notes — while
-  planning, when Lead is waiting on them. Coders never edit it.
-- **Status is not in this file.** Status lives in state.md (`UNASSIGNED → IN_PROGRESS(coder-N) →
-  IN_REVIEW(coder-N) → COMPLETED`), written only by Lead from the messages it receives.
-- **Assignment is explicit.** Lead names the task id in each coder's spawn prompt. Coders do not
-  claim tasks; one coder, one task, then it stands down.
-- "Blocked by" is Lead's scheduling rule: never assign a task whose blockers are not COMPLETED.
+- **Who writes:** Lead, and only Lead. Tech Lead (MEDIUM) and the architects (COMPLEX, Phase 1
+  only) read it and send their changes — acceptance criteria, risk notes, new tasks — to Lead in
+  their answers; Lead writes them in. Coders never edit it.
+- **Status is in this file.** Lead sets `IN_PROGRESS(coder-N)` before the spawn, `IN_REVIEW` and
+  `DONE` from the coder's messages. state.md keeps the roster, rotations and escalations, not task
+  statuses — one store for each thing.
+- **Assignment is explicit.** Lead copies the task section verbatim into the coder's spawn prompt.
+  Coders do not claim tasks; one coder, one task, then it stands down.
+- "Blocked by" is Lead's scheduling rule: a task is available when it is TODO and every blocker is
+  DONE. The conventions task is never available in Phase 2 — Lead spawns it in Phase 3.
 
 ## 3. Lead relay — the only messaging protocol
 
@@ -125,7 +133,7 @@ For each incoming message with a `TO:` header:
    One message per recipient, in parallel. **Forward verbatim** — no summarising, no editing, no
    reading of the referenced files. An exact repeat of a message you already forwarded is ignored.
 2. Append one line per recipient to `.claude/teams/{team-name}/relay.log` (see below).
-3. Apply the side effects the message implies (e.g. `IN_REVIEW` status in state.md, 📢 feed line).
+3. Apply the side effects the message implies (e.g. `IN_REVIEW` status in PLAN.md, 📢 feed line).
 4. If a name in `TO:` is not in the roster (stood down, never spawned), do not forward.
    Reply to the sender: `ROSTER: <name> is not on the team — current roster: ...`. A name that
    is mid-rotation is not "not on the team": hold the message and forward it to the successor.

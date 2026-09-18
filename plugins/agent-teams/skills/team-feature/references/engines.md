@@ -352,7 +352,7 @@ three mechanical adjustments for things that only exist inside Claude Code.
 | "message tech-lead / Lead / another teammate" | "end your reply with `ESCALATE TO {recipient}: <message>`" |
 | "you are READ-ONLY, never use Write or Edit" | keep the sentence AND enforce it with `--sandbox read-only` — instructions alone are not a boundary |
 | relay mechanics: `SendMessage(to="main")`, `TO:` / `FROM:` lines, "end your turn while waiting" | "return it as your reply" — the proxy adds the `TO:` line and does the relaying |
-| references to `TaskUpdate` / `TaskList` / tasks.md statuses / team roster mechanics | drop; Lead owns task status (state.md), the proxy owns the conversation |
+| references to PLAN.md status updates / team roster mechanics | drop; Lead owns task state (PLAN.md), the proxy owns the conversation |
 
 State this translation explicitly at the top of the brief so the engine knows why messaging verbs
 are absent:
