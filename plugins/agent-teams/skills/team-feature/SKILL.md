@@ -80,6 +80,8 @@ The `.conventions/` directory is the **single source of truth** for project patt
 Every role runs on **Claude by default**. A user MAY reassign individual roles to an external CLI
 agent (Codex, Kimi, Grok, Cursor) in `~/.claude/agent-teams.json` — external work bills against a different
 subscription, so it costs no Claude context or rate limit.
+`second-reviewer` is the one exception: it is off unless you list it. It gives a second *opinion*,
+never a second verdict — the coder still hears one verdict, from `unified-reviewer`.
 
 - **No config file → nothing changes.** This is the stock path and must stay zero-cost: Step 0b exits
   after one Read that finds nothing.
@@ -114,6 +116,7 @@ schema, presets, both mechanics, failure handling). No config file → one Read 
 | **Tech Lead** (MEDIUM) | Whole session | Lead (planning) + Coders (escalations only, directly) | Validate plan, risks, rule on escalations, DECISIONS.md, final cross-task check. Does not review tasks |
 | **Coder** | Per task | Reviewer (directly), Lead (DONE/STUCK) | Implement, self-check, request review, fix feedback, commit |
 | **Unified Reviewer** | Whole session (rotated) | Coder only (directly) | The one per-task review at every level: security, logic, fit with plan, quality |
+| **Second Reviewer** (optional) | One SENSITIVE task (`second-reviewer-{id}`) | Unified Reviewer only | A different engine's findings with `file:line` — never a verdict, never the coder. |
 | **Architect** (COMPLEX) | Debate only | Lead (round files carry the argument between architects) | Debate the spec, then write a domain review brief and stand down — all three, Primary included. Review goes to the reviewer, decisions to Lead, the final consistency check to a one-shot agent. |
 
 ## Review Model — One Reviewer per Task, Global Checks at the End
@@ -123,6 +126,17 @@ Every task passes exactly two gates before it is committed, at every complexity 
 1. **Coder self-check** — conventions checklist, then linter / type checker / tests.
 2. **One review** by `unified-reviewer` — security, logic, fit with the plan, quality, in one pass.
    It goes deeper on its own when a task touches auth, payments, migrations or shared infrastructure.
+
+**Optional depth on SENSITIVE tasks.** When the reviewer marks a task SENSITIVE and you have
+configured a `second-reviewer` on a different engine, that engine reads the same task and sends its
+findings to the reviewer — never to the coder. The reviewer checks each finding against the actual
+lines, drops what it cannot confirm, and folds the rest into its own single verdict, marked
+`[second:<engine>]`. The gate count does not change: one reviewer, one verdict.
+With no `second-reviewer` configured — the default — none of this happens.
+
+`second-reviewer` — a second *opinion*, not a second verdict — is configured in
+`~/.claude/agent-teams.json` (`references/engines.md`); the protocol the reviewer follows when
+one is present lives in `agents/unified-reviewer.md`.
 
 Then, once for the whole feature, the **global checks** in Phase 3: cross-task consistency over the
 combined diff, and the verifiers (build & tests, browser, spec) with the fix-verify loop.

@@ -106,7 +106,8 @@ Feature DoD applies — see VERIFICATION_PLAN.md
   `ALREADY ANSWERED: <its first line>` — no second review, no second message to the sender.
   Otherwise handle it normally and answer `<sender>` directly.
 - **Answer every request that reached you** before ending your turn — two REVIEW requests can
-  arrive in the same turn.
+  arrive in the same turn. A task you have announced as `SENSITIVE:` and are waiting on is not an
+  unanswered request — that coder's digest is owed when the wait ends, not in this turn.
 - **Exception — proxy teammates while their engine runs.** A proxy that launched its engine in the
   background stays in its turn until the engine process exits: it has nothing to be resumed by if it
   ends its turn early. "End your turn while waiting" applies to waiting on teammates, not on your engine.
@@ -137,7 +138,7 @@ SendMessage(to="<name>", message="RESEND: from <sender>\n<the body, verbatim>")
 - Forward verbatim — no summarising, no editing.
 
 **Lead's own messages follow the same rule.** VALIDATE PLAN, DEBATE PLAN, ROUND N, FINAL, IDENTIFY
-RISKS, ROTATION, ROSTER UPDATE, STATUS?: if the result is `queued`, add a pending.log line with
+RISKS, ROTATION, ROSTER UPDATE, STATUS?, `SECOND REVIEWER:` (both the engine answer and `none`): if the result is `queued`, add a pending.log line with
 sender `lead` and send it again on that teammate's next completion notification. To avoid the case
 altogether, send Lead's first instruction to a freshly spawned teammate only after its `READY` — every
 long-lived teammate (reviewer, tech-lead, architects) is spawned with "reply READY and end your turn".
@@ -146,7 +147,18 @@ long-lived teammate (reviewer, tech-lead, architects) is spawned with "reply REA
 ### When an answer does not come — idle check
 
 Nothing wakes a team in which every member has ended its turn. So before Lead ends a turn while
-work is unfinished and **no teammate or engine is running**:
+work is unfinished and **no teammate or engine is running**.
+
+**`second-reviewer-{id}` does not count as running for this check.** Every other role produces
+something the run needs, so waiting for one is the right thing to do; a second opinion is optional by
+construction and its absence changes no verdict. Counting it would mean one instance that stops
+working without ending its turn — a hung engine call, a subagent turn that never returns — leaves the
+check disarmed for the rest of the run, and a reviewer parked on that task waits for something nobody
+is watching for. So: run this check whenever every teammate **other than** a `second-reviewer-{id}` is
+idle, and treat each line in `## Second opinions` per step 2 below. Cancelling a live instance costs
+the run one optional opinion on one task; not cancelling a dead one costs the run.
+
+Then:
 
 1. Deliver every `OPEN` line in `pending.log` (as above).
 2. For every task `IN_REVIEW` or `IN_PROGRESS` in PLAN.md whose coder is idle, send the coder
@@ -154,6 +166,19 @@ work is unfinished and **no teammate or engine is running**:
    waits for a review or a ruling, resend that request yourself: `RESEND: from coder-N` + the quoted
    body. Do the same for any instruction of yours still unanswered (a ROTATION without DONE, a round
    without its answer): send it again.
+   **Exception — a task listed in `## Second opinions` in state.md.** Do not resend that coder's
+   REVIEW: its reviewer may be parked waiting for a second opinion on that task — an opinion, never
+   a second verdict — and a resend into a park deepens the deadlock this check exists to break. The
+   line does not tell you whether the park is still open: it is cleared when the task reaches DONE or
+   you cancel the instance, while the park ends earlier, the moment the second opinion arrives.
+   Handle the task per "When a Second Opinion Does Not Come" in `phase2-monitoring.md` — that is
+   right either way, and it is never "do nothing". Its `SECOND REVIEWER: none` with the task id
+   releases a reviewer that is still parked, and a reviewer that is no longer parked treats the same
+   message as a nudge and reviews that task if it is still awaiting review — so a REVIEW that never
+   arrived is acted on rather than silently left. It also clears the line, so the ordinary resend
+   above applies to that task at your next check. The line stays until DONE or a cancel, so it is
+   still there when the instance died without a word — which is exactly the case this check has to
+   catch.
 3. Only a teammate that ignores a `RESEND:` or a `STATUS?` is treated as stuck (phase2-monitoring.md).
 
 This check costs nothing on a healthy run: a team with a message in flight always has someone

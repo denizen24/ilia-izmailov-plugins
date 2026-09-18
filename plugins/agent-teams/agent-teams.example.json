@@ -1,5 +1,5 @@
 {
-  "_readme": "Copy to ~/.claude/agent-teams.json and change only the roles you want elsewhere. Every role defaults to 'claude' — deleting this file restores stock behavior. Engines: claude | codex | kimi | grok | cursor. See skills/team-feature/references/engines.md.",
+  "_readme": "Copy to ~/.claude/agent-teams.json and change only the roles you want elsewhere. Every role listed below defaults to 'claude' — deleting this file restores stock behavior. Engines: claude | codex | kimi | grok | cursor. See skills/team-feature/references/engines.md.",
 
   "enabled": true,
   "fallback": "claude",
@@ -23,6 +23,8 @@
 
     "coder": "claude"
   },
+
+  "_second_reviewer_note": "Optional and off by default — second-reviewer is the one exception: it is off unless you list it. To switch it on, add \"second-reviewer\": \"codex\" (or kimi | cursor | claude) to the roles block above; its engine must differ from unified-reviewer's, otherwise the run warns once and skips it. It gives unified-reviewer a second opinion on tasks that reviewer marks SENSITIVE, and it never issues a verdict — the coder still hears one verdict, from unified-reviewer. If its engine is absent or dies, the run simply proceeds with the one reviewer.",
 
   "_engines_note": "Optional. Only needed when a CLI changes its flags or you want a different model/effort. Omit entirely to use the built-in presets.",
   "engines": {
