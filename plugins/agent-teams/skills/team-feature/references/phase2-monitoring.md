@@ -22,7 +22,7 @@ Feed rules: user's language, product terms, one entry per event, always include 
 | `second-reviewer-{id}`: task #N reached DONE, or you cancelled the instance | Remove that task's line from `## Second opinions` in state.md. **Those two events are the only ones that clear it** — never the instance merely finishing: it sends its findings to `unified-reviewer` and stands down, and the only messages you ever get from it are its proxy's `ENGINE RUNNING` and `ENGINE_DOWN`, so its turn ending is not an event you can see. A run in which it died, produced nothing, or never reached the reviewer looks exactly the same from here. While the line is there, the idle check (`team-runtime.md` §3) and "When a Second Opinion Does Not Come" can still release the parked reviewer; remove it early and nothing can. The instance is never respawned and never rotated. | Nothing — on DONE the task's own `✅` digest closes its `🔬` line, on a cancel the `🔬 …недоступно` line does. |
 | Tech Lead: `DECISION: [one-liner]` (MEDIUM only) | No action — decision is already logged in DECISIONS.md by its author. On SIMPLE/COMPLEX you write these yourself. | `📋 Decision: {the one-liner, in product terms — what was decided and why}` |
 | Proxy teammate: `ENGINE RUNNING: {role} on {engine}, started {HH:MM}` + output path | Record the start time and output path in state.md. No other action. **Exception — `second-reviewer-{id}`:** record it and print nothing. The `🔬` line for that task already told the user a second opinion is running; a second line for the same event would open something the feed never closes. | `⚙️ {role} работает на {engine}, запущен в {HH:MM}.` For `second-reviewer-{id}`, nothing. |
-| Proxy teammate: `ENGINE_DOWN: {role}. {reason}` | `TaskStop` the proxy if it is still running. Apply `fallback` from the engine config (default `claude`): spawn the normal Claude teammate under the **same name** (latest wins). A reviewer or tech-lead successor gets its normal Step 5 prompt and replies READY; a coder successor gets the normal coder prompt with its task and starts working. After READY, deliver any `OPEN` pending.log line for that name, and SendMessage every coder whose task is `IN_REVIEW` (reviewer) or who escalated (tech-lead): "ROSTER UPDATE: {role} was replaced — if you are still waiting for an answer, re-send your request to {role}." If `fallback: "fail"`, stop the run and report. **Exception — `second-reviewer-{id}`: it has no successor.** `TaskStop` it, send `SendMessage(to="unified-reviewer", message="SECOND REVIEWER: none\ntask #N")` — the task id on the second line, since the reviewer may be parked on more than one task — clear that task's line from `## Second opinions`, and continue the run — full text in "When a Second Opinion Does Not Come". No fallback spawn: a Claude second opinion next to a Claude reviewer is not an independent one, it just costs twice and tags its findings `[second:claude]`. No ROSTER UPDATE either — coders do not know this name and must not learn it. | `⚙️ {engine} отвалился на роли «{role}» ({reason}) — переключил на Claude, работа продолжается.` For `second-reviewer-{id}`, that line instead: `🔬 Второе мнение недоступно ({reason}) — ревьюер продолжает один.` |
+| Proxy teammate: `ENGINE_DOWN: {role}. {reason}` | `TaskStop` the proxy if it is still running. Apply `fallback` from the engine config (default `claude`): spawn the normal Claude teammate under the **same name** (latest wins). A reviewer or tech-lead successor gets its normal Step 5 prompt and replies READY; a coder successor gets the normal coder prompt with its task and starts working. After READY, deliver any `OPEN` pending.log line for that name, and SendMessage every coder whose task is `IN_REVIEW` (reviewer) or who escalated (tech-lead): "ROSTER UPDATE: {role} was replaced — if you are still waiting for an answer, re-send your request to {role}." If `fallback: "fail"`, stop the run and report. **Exception — `second-reviewer-{id}`: it has no successor.** `TaskStop` it, send `SendMessage(to="unified-reviewer", message="SECOND REVIEWER: none\ntask #N")` — the task id on the second line, since the reviewer may be parked on more than one task — clear that task's line from `## Second opinions`, and continue the run — full text in "When a Second Opinion Does Not Come". No fallback spawn: a Claude second opinion next to a Claude reviewer is not an independent one, it just costs twice and tags its findings `[second:claude]`. No ROSTER UPDATE either — coders do not know this name and must not learn it. | `⚙️ {engine} отвалился на роли «{role}» ({reason}) — переключил на Claude, работа продолжается.` For `second-reviewer-{id}`, that line instead, and only while that task's `🔬` is still open — not DONE, no close printed yet: `🔬 Второе мнение недоступно ({reason}) — ревьюер продолжает один.` |
 
 ## Task-Done Digest
 
@@ -56,7 +56,7 @@ After every event, update the run files:
 
 ## Compaction Recovery
 
-If context feels incomplete or current state is unclear: read `.claude/teams/{team-name}/state.md`, `PLAN.md` and `pending.log` (deliver every `OPEN` line) — together they are self-describing (the **Phase** field in state.md tells which phase instructions to follow step by step; roster and exact commands are in state.md, task statuses in PLAN.md). Honor its `## Engines` section for later spawns — do NOT re-read `~/.claude/agent-teams.json` and do NOT re-probe the CLIs; if the section is absent, every role is Claude. A `## Second opinions` section, if there is one, lists the second opinions that were in flight — treat each line per "When a Second Opinion Does Not Come".
+If context feels incomplete or current state is unclear: read `.claude/teams/{team-name}/state.md`, `PLAN.md` and `pending.log` (deliver every `OPEN` line) — together they are self-describing (the **Phase** field in state.md tells which phase instructions to follow step by step; roster and exact commands are in state.md, task statuses in PLAN.md). Honor its `## Engines` section for later spawns — do NOT re-read `~/.claude/agent-teams.json` and do NOT re-probe the CLIs; if the section is absent, every role is Claude. A `## Second opinions` section, if there is one, lists the second opinions that were in flight: a compaction is one of the cases where the wait counts as expired, because nothing in a restored context tells you whether those findings already reached the reviewer, and an unseen park costs the run while a cancel costs one optional opinion. Treat each line per "When a Second Opinion Does Not Come" — including a line stamped `spawned` two minutes ago.
 
 ## When a Teammate Goes Quiet — Bounded Wait
 
@@ -118,12 +118,11 @@ several instances can be alive at once:
    string on the first line, the task id on the second, since the reviewer may be parked on more than
    one task. It stops waiting, sends that coder its own verdict, and the task finishes normally.
 
-**Four paths lead here, and none of them changes those two actions:**
+**Three paths lead here, and none of them changes those two actions:**
 
 | Path | How you notice |
 |------|----------------|
-| `ENGINE_DOWN: second-reviewer-{id}` | The proxy reported it — see the `ENGINE_DOWN` row above |
-| The engine outlived the proxy's ceiling | This role's proxy runs its CLI in the foreground with `timeout: 600000`; past ten minutes the call comes back empty even if the engine finished its work |
+| `ENGINE_DOWN: second-reviewer-{id}` | The proxy reported it — see the `ENGINE_DOWN` row above. This role's proxy runs its CLI in the foreground with `timeout: 600000`, so an engine that outlives that ceiling comes back empty even if it finished its work; the proxy reports that as `ENGINE_DOWN` like any other failure. The ceiling is not a path of its own — if the proxy never gets to report it, the idle check below is what catches the task |
 | Your own end-of-turn idle check | `team-runtime.md` §3 — nobody running, a task still `IN_REVIEW`, and a line for it in `## Second opinions` |
 | `ROTATION` of `unified-reviewer` | The successor was never parked on that task — nothing is handed over to it and no findings arrive for it later |
 
@@ -162,11 +161,17 @@ this section finds it. The idle check iterates every line and treats each task o
 task #4's instance says nothing about task #7's. A run in which no task was ever marked SENSITIVE
 has no such section at all.
 
-**Every `🔬` line you print is closed.** On the happy path the task's own `✅` digest closes it. On
-every failure branch — engine down, wait expired, rotation, no answer — the closing line is
-`🔬 Второе мнение недоступно ({reason}) — ревьюер продолжает один.` A branch that never printed a
-`🔬` line (`SECOND REVIEWER: none`, including the same-engine skip) needs no close: silence is the
-whole output there. An opened line with no close is a bug in the feed even when the run finishes fine.
+**Every `🔬` line you print is closed, and closed once.** On the happy path the task's own `✅`
+digest closes it. On every failure branch — engine down, wait expired, rotation, no answer — the
+closing line is `🔬 Второе мнение недоступно ({reason}) — ревьюер продолжает один.`, printed **only
+while that task's `🔬` is still open**: its status in PLAN.md is not DONE, and no `…недоступно`
+line has gone out for it yet. Check both before printing — a cancel can fire long after that task's
+second opinion arrived and was folded in, since the state line is cleared at DONE and not when the
+instance finished, and closing a `🔬` the `✅` digest already closed contradicts the feed. What the
+close claims is only what is true from here on: the rest of that task's review runs without a second
+opinion. A branch that never printed a `🔬` line (`SECOND REVIEWER: none`, including the same-engine
+skip) needs no close: silence is the whole output there. An opened line with no close is a bug in the
+feed even when the run finishes fine.
 
 ## Rotating the Reviewer
 

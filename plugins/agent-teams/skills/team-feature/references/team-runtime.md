@@ -155,12 +155,19 @@ work is unfinished and **no teammate or engine is running**:
    waits for a review or a ruling, resend that request yourself: `RESEND: from coder-N` + the quoted
    body. Do the same for any instruction of yours still unanswered (a ROTATION without DONE, a round
    without its answer): send it again.
-   **Exception — a task listed in `## Second opinions` in state.md.** Its reviewer is parked waiting
-   for a second opinion on that task — an opinion, never a second verdict — so resending that coder's
-   REVIEW deepens the deadlock this check exists to break. Leave the REVIEW alone and handle the
-   task per "When a Second Opinion Does Not Come" in `phase2-monitoring.md`. The line stays until
-   that task is DONE or you cancel the instance, so it is still there when the instance died without
-   a word — which is exactly the case this check has to catch.
+   **Exception — a task listed in `## Second opinions` in state.md.** Do not resend that coder's
+   REVIEW: its reviewer may be parked waiting for a second opinion on that task — an opinion, never
+   a second verdict — and a resend into a park deepens the deadlock this check exists to break. The
+   line does not tell you whether the park is still open: it is cleared when the task reaches DONE or
+   you cancel the instance, while the park ends earlier, the moment the second opinion arrives.
+   Handle the task per "When a Second Opinion Does Not Come" in `phase2-monitoring.md` — that is
+   right either way, and it is never "do nothing". Its `SECOND REVIEWER: none` with the task id
+   releases a reviewer that is still parked, and a reviewer that is no longer parked treats the same
+   message as a nudge and reviews that task if it is still awaiting review — so a REVIEW that never
+   arrived is acted on rather than silently left. It also clears the line, so the ordinary resend
+   above applies to that task at your next check. The line stays until DONE or a cancel, so it is
+   still there when the instance died without a word — which is exactly the case this check has to
+   catch.
 3. Only a teammate that ignores a `RESEND:` or a `STATUS?` is treated as stuck (phase2-monitoring.md).
 
 This check costs nothing on a healthy run: a team with a message in flight always has someone
