@@ -163,13 +163,16 @@ Copy them byte for byte — four files in this skill are written against this ta
 |---|---|---|
 | `SECOND REVIEWER AVAILABLE: <engine>` | Lead → you, in your **spawn prompt** | A second reviewer exists for this run, in general. No such line = this section is inert. |
 | `SENSITIVE: task #N — <why>. Files: <list>.` | you → `main` | Your first action on a sensitive task, and only with the line above. |
-| `SECOND REVIEWER: <engine>` | Lead → you | Lead spawned one for **this** task; its findings are coming. |
-| `SECOND REVIEWER: none` | Lead → you | No second opinion for this task. Proceed alone. |
+| `SECOND REVIEWER: <engine>\ntask #N` | Lead → you | Lead spawned one for task #N; its findings are coming. |
+| `SECOND REVIEWER: none\ntask #N` | Lead → you | No second opinion for task #N. Proceed alone on it. |
 | `SECOND OPINION: task #N` | `second-reviewer-{N}` → you | Findings only, each with `file:line`. Never a verdict, never to a coder. |
 | `[second:<engine>]` | tag inside your verdict | Marks a second-opinion finding you confirmed yourself. |
 
 The spawn-time string and the runtime one differ on purpose: the first says the run has a second
 reviewer at all, the second answers one task. Never send or expect one in place of the other.
+
+Both runtime answers arrive as two lines — the canonical string, then `task #N`. You can be parked on
+several tasks at once, so the second line is what tells you which one the answer is about.
 
 ### On a SENSITIVE task
 
@@ -179,10 +182,10 @@ reviewer at all, the second answers one task. Never send or expect one in place 
    own pass.
 2. **End your turn.** Lead answers at once and the answer resumes you. Staying in your turn to wait is
    what puts that answer in the `queued` state, where it is lost.
-3. On `SECOND REVIEWER: none` — review the task alone and send the coder your digest, as always.
-4. On `SECOND REVIEWER: <engine>` — do your own full pass anyway and write your report file, then wait
-   for `SECOND OPINION: task #N` before you send the coder anything. **End your turn to wait**: the
-   findings resume you, and Lead can only reach a reviewer that is idle.
+3. On `SECOND REVIEWER: none` for that task — review it alone and send the coder your digest, as always.
+4. On `SECOND REVIEWER: <engine>` for that task — do your own full pass anyway and write your report
+   file, then wait for `SECOND OPINION: task #N` before you send the coder anything. **End your turn
+   to wait**: the findings resume you, and Lead can only reach a reviewer that is idle.
 
 Your own pass is the same on both paths. A second opinion is added to your findings; it never replaces
 them and never shortens the work.
@@ -245,8 +248,9 @@ none of it ends the wait:
 - **`SECOND OPINION: task #M` for a different task** — not your resume signal. It releases task #M's
   verdict, not this one's.
 - **`STATUS?` from Lead** — answer that you are parked on task #N waiting for `SECOND OPINION`.
-- **`SECOND REVIEWER: none` for the task you are parked on** — Lead cancelled it. Stop waiting and send
-  that coder your verdict alone; a `SECOND OPINION` that still turns up afterwards is a late one.
+- **`SECOND REVIEWER: none` whose second line names a task you are parked on** — Lead cancelled that
+  one. Stop waiting on it and send that coder your verdict alone; a `SECOND OPINION` that still turns
+  up afterwards is a late one. Another task's park is untouched.
 - **`ROTATION`** — stop waiting. Send your verdict as it stands, without the second opinion, and name
   the task and the engine in your standing-findings note: Lead cancels that instance, so the second
   opinion is not coming and your successor should not sit waiting for one.
