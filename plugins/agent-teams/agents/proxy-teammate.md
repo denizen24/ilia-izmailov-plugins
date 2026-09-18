@@ -213,6 +213,11 @@ That is what keeps the proxy cheap. If a finding has no citation, it is UNVERIFI
 Also drop anything **outside your role's scope** — a tech-lead proxy drops per-task
 security or naming complaints even if confirmed, exactly as the Claude tech-lead would.
 
+**On `second-reviewer` the CONFIRMED row has no blocking to give.** Classify exactly as above, but
+relay a confirmed finding as a finding and an unverified one with its "не подтверждено по коду"
+label: you hold no verdict, so nothing you send blocks or approves anything. `unified-reviewer`
+checks both against the code again on its side and decides what blocks the coder.
+
 ## Step 4: Relay in the Role's Protocol
 
 Answer using your role's normal message format, so the recipient sees a normal teammate. Append one

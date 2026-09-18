@@ -46,6 +46,11 @@ which is the useful assignment when `unified-reviewer` itself runs on an externa
 - **teammate** → engine `claude` spawns the normal teammate; a non-claude engine spawns
   `agent-teams:proxy-teammate` under the same role name, which joins the team, speaks the team
   protocol, and delegates the thinking to the external CLI session.
+  **`second-reviewer` matches neither half as written:** there is no normal teammate behind it (no
+  `agents/second-reviewer.md` exists) and the name is never the role id — it is
+  `second-reviewer-{task id}` on both engines. What is spawned, and out of what, is in
+  "`second-reviewer` — a brief with no agent file behind it" below, which covers `claude` and the
+  external engines alike. Read it before you spawn this role.
 
 `lead` and `browser-verifier` ignore any assignment other than `claude` — warn once and continue.
 
@@ -365,7 +370,8 @@ always had. The exact message and the full recovery are in `phase2-monitoring.md
 An external engine must receive **the same instructions the Claude agent would have received** —
 never a summary, never a rewritten "short version". The role brief is the agent file itself, with
 three mechanical adjustments for things that only exist inside Claude Code. One role has no agent
-file — `second-reviewer`; its brief is composed from the reviewer's, below.
+file — `second-reviewer`; its brief is composed from the reviewer's, below, and that composition is
+what its `claude` instance is given too, so that subsection is not external-engine-only.
 
 **Keep, verbatim:**
 
@@ -415,13 +421,29 @@ on every engine, out of two parts:
 2. **The findings-only contract**, which **replaces** that file's verdict and messaging sections
    (`Output Format`, `Write Your Findings to a File First`, `SendMessage Protocol`, and the whole
    `Second Opinion on a SENSITIVE Task` section — that one describes the first reviewer's side of
-   this protocol, not yours) **and two sentences of its `<role>` block**: "the only code reviewer on
-   this feature team … reviewed by you and nobody else", which is false for an instance that is by
-   construction a second opinion on that task, and the HARD BOUNDARY's "Your ONLY output is review
-   findings sent to the coder via SendMessage", which names the wrong addressee. The rest of that
-   boundary — READ-ONLY, never Write or Edit on source, never fix it yourself — stays as written.
-   Leave those two sentences standing and the bolded one wins: the instance sends its findings
-   straight to a coder, untriaged and next to a verdict the coder was going to get anyway.
+   this protocol, not yours) **and every line that tells the reviewer it is the only one and the last
+   one**:
+
+   | Overridden, named explicitly | Why it cannot stand |
+   |---|---|
+   | `<role>`: "the only code reviewer on this feature team … reviewed by you and nobody else before it is committed" | False for an instance that is by construction a second opinion on that task |
+   | `<role>`: "Nobody reviews after you on a per-task basis. … they do not repeat your work, so what you miss here stays missed until then" | The reverse of this instance's place in the run: `unified-reviewer` re-checks every finding it sends against the code, and decides what reaches the coder |
+   | `<role>`, HARD BOUNDARY: "Your ONLY output is review findings sent to the coder via SendMessage" | Names the wrong addressee — the findings go to `unified-reviewer` and to the findings file |
+   | frontmatter `description`: "The one per-task code reviewer on every feature team, at every complexity level." | The first claim again, in the line a `claude` spawn loads along with the rest of the file |
+
+   Everything else in that block stays as written: the one priority-ordered pass over security,
+   logic, quality and fit, and the boundary's READ-ONLY, never Write or Edit on source, never fix it
+   yourself. Leave any of the four standing and it beats the contract: the instance sends its
+   findings straight to a coder, untriaged and next to a verdict the coder was going to get anyway,
+   or treats a list nobody has checked yet as the last word on the task.
+
+   The `description` row is a `claude`-path concern only. The keep list above takes the `<example>`
+   blocks out of that frontmatter and nothing else, so on an external engine the sentence never
+   enters the brief; a `claude` spawn gets the file whole, frontmatter included, and the contract has
+   to name it like the rest. The `<example>` blocks themselves stay on both paths — they calibrate
+   depth and what a CRITICAL has to carry, which is exactly what this instance needs. One of them
+   shows a coder addressing the reviewer directly; the contract's "`unified-reviewer` is the only
+   recipient you ever have" is what answers it, and that is why the line is written as an absolute.
 
 ```
 You give a second opinion on task #N. You do not give a verdict.
@@ -432,6 +454,10 @@ source code exactly as it says; the only file you write is the findings file nam
 
 - Your output is findings only, each with its file:line. No approval, no "nothing to fix", no other
   line that can be read as a verdict — the coder hears exactly one verdict and it is not yours.
+- Nothing you send is final. `unified-reviewer` opens every line you cite, checks the finding against
+  the code as written, and only then decides what reaches the coder; what it cannot confirm is
+  recorded as unconfirmed. Cite precisely and say where you are unsure — that is what makes a finding
+  checkable, and an uncheckable one goes nowhere.
 - Write your findings to .claude/teams/{team-name}/reports/review-task{id}-second-r{round}.md first,
   then send `SECOND OPINION: task #N` to `unified-reviewer`. That file is your record of this task.
 - `unified-reviewer` is the only recipient you ever have. You never message a coder.
@@ -459,7 +485,20 @@ sends the message without writing the file is invisible in the summary.
 | Resolved engine | Spawn |
 |-----------------|-------|
 | external | `Task(subagent_type="agent-teams:proxy-teammate", name="second-reviewer-{task id}", ...)` per Mechanic B, with the composed brief as its role brief. The proxy writes the findings file — a read-only engine cannot (`agents/proxy-teammate.md`). |
-| `claude` | `Task(subagent_type="agent-teams:unified-reviewer", name="second-reviewer-{task id}", ...)` — the agent file the composition starts from — with the findings-only contract at the top of the prompt, stating that it overrides that file's verdict and messaging sections **and the two `<role>` sentences named above**. Nothing translates for this instance and nothing stands between it and a coder, so the override has to be explicit. There is no `agent-teams:second-reviewer` subagent type. |
+| `claude` | `Task(subagent_type="agent-teams:unified-reviewer", name="second-reviewer-{task id}", ...)` — the agent file the composition starts from — with the findings-only contract at the top of the prompt, stating that it overrides that file's verdict and messaging sections **and the four lines named above**. That spawn loads the file whole, frontmatter included; nothing translates for this instance and nothing stands between it and a coder, so the override has to be explicit. There is no `agent-teams:second-reviewer` subagent type. |
+
+**The ten-minute ceiling belongs to the proxy, not to this role.** On an external engine the proxy
+runs its CLI in the foreground with `timeout: 600000`, so the call returns inside ten minutes whatever
+the engine does (`agents/proxy-teammate.md`). On `claude` there is no proxy and no such ceiling: **the
+bound is the subagent's own turn, and nothing states another one** — a Claude subagent carries no
+timer this plugin can set. When that turn ends the parked reviewer is released either way — by
+`SECOND OPINION: task #N` if findings came, otherwise at Lead's next end-of-turn idle check, which
+finds the task still `IN_REVIEW` with a line in `## Second opinions` and cancels the second opinion
+("When a Second Opinion Does Not Come", `phase2-monitoring.md`). Until it ends, that check cannot fire
+at all: it runs only when nothing is running (`team-runtime.md` §3), so a turn that never ends is
+noticed by nothing. Lead's remedy is then the same two actions as on every other path, taken from any
+turn it is already in: `TaskStop second-reviewer-{task id}`, then `SECOND REVIEWER: none` with
+`task #N` on the second line.
 
 ### Which roles transfer well
 
