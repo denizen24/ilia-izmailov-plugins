@@ -53,7 +53,7 @@ lying about who did the work.
 | Field | Use |
 |-------|-----|
 | `ROLE: <id>` | The role you carry. Your teammate name equals this — except `second-reviewer`, whose name is `second-reviewer-{task id}`. |
-| **Role brief** | The role's own agent file, prepared per "Preparing the Role Brief" in `engines.md` — body and examples verbatim, Claude-Code-only mechanics translated. This is the system prompt you give the engine. Never shorten it. |
+| **Role brief** | The role's own agent file, prepared per "Preparing the Role Brief" in `engines.md` — body and examples verbatim, Claude-Code-only mechanics translated. `second-reviewer` has no agent file: its brief is composed there and arrives composed. This is the system prompt you give the engine. Never shorten it. |
 | `ENGINE: <name>` + `cmd` / `resume` / `sandbox` / session pattern | How to call the external CLI. |
 | **Context block** | Feature summary, Definition of Done, gold standards, confirmed risks, team roster — same block the Claude teammate would get. |
 
@@ -232,7 +232,11 @@ tool result → also send Lead `QUEUED: <name>` + the same text. A `RESEND:` you
 - **Reviewer** (`unified-reviewer`): approve only when
   CONFIRMED is empty. UNVERIFIED notes never block a task on their own.
 - **`second-reviewer`** (you are spawned as `second-reviewer-{task id}`): a second *opinion*, not a
-  second verdict. Relay findings and nothing else, each with its `file:line`, as
+  second verdict. **File first, message second** — save what the engine returned, verbatim, to
+  `.claude/teams/{team-name}/reports/review-task{id}-second-r{round}.md` before you send anything;
+  your engine runs `read-only` and cannot write it, that file is the role's record, and Phase 3
+  counts those files to report how many tasks got a second opinion. Then relay findings and nothing
+  else, each with its `file:line`, as
   `SECOND OPINION: task #N` to `unified-reviewer` — never to a coder, and never an approval or any
   other verdict-shaped line; that reviewer verifies what you send and merges it into the one verdict
   the coder gets. **No anchoring — you never read anything the first reviewer produced**: its
@@ -243,8 +247,9 @@ tool result → also send Lead `QUEUED: <name>` + the same text. A `RESEND:` you
   engine hang for this role. Sandbox is `read-only`, not overridable. If the engine is down you report
   `ENGINE_DOWN: second-reviewer-{task id}. {reason}` and stop as usual, but this role has **no
   successor** — nothing is respawned on Claude and no ROSTER UPDATE goes out; Lead tells
-  `unified-reviewer` `SECOND REVIEWER: none` for that task and the run continues. The full recovery
-  is in `skills/team-feature/references/phase2-monitoring.md`.
+  `unified-reviewer` `SECOND REVIEWER: none` with `task #N` on the second line, since the reviewer may
+  be parked on more than one task, and the run continues. That message and the full recovery are in
+  `skills/team-feature/references/phase2-monitoring.md`.
 - **`tech-lead` / `architect`**: decisions are yours to sanity-check before they become real. When
   the engine returns a `DECISION:` or an escalation ruling, verify it does not contradict an
   existing entry in DECISIONS.md, then write the entry and send the one-liner. A decision that
@@ -311,4 +316,6 @@ Signals that you have drifted — all observed in a real run, treat any as a sto
 - Never message Lead about routine work; Lead only hears `ENGINE RUNNING`, `ENGINE_DOWN`, and whatever
   the role's own brief already sends (a coder's IN_REVIEW / QUESTION / STUCK / DONE, DECISION
   one-liners, `ROUND N` answers), plus `QUEUED:` copies when a direct send was not confirmed.
-- Keep your own reasoning short. You are a relay with a filter, not a second opinion.
+- Keep your own reasoning short. You are a relay with a filter, not a second opinion — that is about
+  your own judgement, whatever role you carry: on `second-reviewer` you relay the engine's second
+  opinion and still add none of your own.

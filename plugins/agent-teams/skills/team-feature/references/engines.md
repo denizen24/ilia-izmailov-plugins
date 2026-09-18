@@ -97,7 +97,7 @@ a config that never mentions it gets no second opinion at all, not a Claude one.
 | Key | Meaning | Default |
 |-----|---------|---------|
 | `enabled` | Global kill switch. `false` → everything on Claude regardless of `roles`. | `true` |
-| `fallback` | What happens when an assigned CLI is missing or fails: `"claude"` (silent fallback) or `"fail"` (stop the run). `second-reviewer` is exempt from both values: it is skipped, never substituted with `claude`, never fatal — a missing optional CLI must not stop a run. | `"claude"` |
+| `fallback` | What happens when an assigned CLI is missing or fails: `"claude"` (silent fallback) or `"fail"` (stop the run). `second-reviewer` is exempt from both values: under `"claude"` it is skipped rather than substituted, under `"fail"` it is skipped rather than fatal — a missing optional CLI must not stop a run. | `"claude"` |
 | `roles.<id>` | Engine name string, or object `{ engine, model?, effort?, sandbox? }`. `sandbox` is the role's access (`read-only` / `workspace-write`); engines without a sandbox flag map it through their preset — `cursor` turns it into its `mode` flags. | `"claude"` |
 | `engines.<name>` | Override the built-in preset (model, effort, or the full `cmd`/`resume` templates). | built-in presets below |
 
@@ -333,6 +333,7 @@ prompt containing:
 
 - `ROLE: <role id>` and the **full role brief** — see "Preparing the Role Brief" below
   (`agents/unified-reviewer.md` etc.) so the external engine inherits identical instructions.
+  `second-reviewer` has no agent file of its own; its brief is composed there, from the reviewer's.
 - `ENGINE: <name>` plus the resolved `cmd` / `resume` / `sandbox` / session-extraction pattern.
 - The same context block the Claude teammate would receive (feature summary, DoD, gold standards,
   confirmed risks, team roster).
@@ -353,8 +354,9 @@ instead), then deliver that name's `OPEN` lines from `pending.log`,
 and send a ROSTER UPDATE to coders still waiting on it (phase2-monitoring.md, `ENGINE_DOWN`). Print `⚙️ {engine} недоступен — {role} работает на Claude.`
 
 `second-reviewer` has no successor: nothing is respawned, no ROSTER UPDATE is sent, Lead tells
-`unified-reviewer` `SECOND REVIEWER: none` for that task and the run goes on with the one reviewer it
-always had. The full recovery is in `phase2-monitoring.md`.
+`unified-reviewer` `SECOND REVIEWER: none` with `task #N` on the second line — several reviews can be
+parked at once, so the task id is what releases one — and the run goes on with the one reviewer it
+always had. The exact message and the full recovery are in `phase2-monitoring.md`.
 
 ---
 
@@ -362,7 +364,8 @@ always had. The full recovery is in `phase2-monitoring.md`.
 
 An external engine must receive **the same instructions the Claude agent would have received** —
 never a summary, never a rewritten "short version". The role brief is the agent file itself, with
-three mechanical adjustments for things that only exist inside Claude Code.
+three mechanical adjustments for things that only exist inside Claude Code. One role has no agent
+file — `second-reviewer`; its brief is composed from the reviewer's, below.
 
 **Keep, verbatim:**
 
@@ -396,16 +399,67 @@ are absent:
 оркестратор доставит это адресату.
 ```
 
-**`second-reviewer` — the brief is also defined by what it leaves out.** It carries the task, the
-list of changed files and the diff range, and **nothing `unified-reviewer` produced**: no findings, no
-severities, no report file, no hint of what the first reviewer already suspects. Reading
+**Same rule applies to Mechanic A.** A one-shot external role gets the same prompt text the Claude
+one-shot agent would have received (the prompt printed in the phase document), plus the Output
+Contract.
+
+### `second-reviewer` — a brief with no agent file behind it
+
+There is no `agents/second-reviewer.md` and none is planned. The brief is **composed**, the same way
+on every engine, out of two parts:
+
+1. **The body of `agents/unified-reviewer.md`**, kept and translated exactly as above. It is the same
+   job — read this task's code and find what is wrong — and it carries the depth rule, the four
+   priorities, the severity scale and the confidence signals, which is what makes the findings
+   comparable with the first reviewer's.
+2. **The findings-only contract**, which **replaces** that file's verdict and messaging sections
+   (`Output Format`, `Write Your Findings to a File First`, `SendMessage Protocol`, and the whole
+   `Second Opinion on a SENSITIVE Task` section — that one describes the first reviewer's side of
+   this protocol, not yours) **and two sentences of its `<role>` block**: "the only code reviewer on
+   this feature team … reviewed by you and nobody else", which is false for an instance that is by
+   construction a second opinion on that task, and the HARD BOUNDARY's "Your ONLY output is review
+   findings sent to the coder via SendMessage", which names the wrong addressee. The rest of that
+   boundary — READ-ONLY, never Write or Edit on source, never fix it yourself — stays as written.
+   Leave those two sentences standing and the bolded one wins: the instance sends its findings
+   straight to a coder, untriaged and next to a verdict the coder was going to get anyway.
+
+```
+You give a second opinion on task #N. You do not give a verdict.
+
+Where this contract and the role file above disagree, this contract wins — it is written for the
+second opinion, that file is written for the reviewer who owns the verdict. You are READ-ONLY on
+source code exactly as it says; the only file you write is the findings file named below.
+
+- Your output is findings only, each with its file:line. No approval, no "nothing to fix", no other
+  line that can be read as a verdict — the coder hears exactly one verdict and it is not yours.
+- Write your findings to .claude/teams/{team-name}/reports/review-task{id}-second-r{round}.md first,
+  then send `SECOND OPINION: task #N` to `unified-reviewer`. That file is your record of this task.
+- `unified-reviewer` is the only recipient you ever have. You never message a coder.
+- Then you are done — this instance lives for one task.
+```
+
+On an external engine the write line is translated like every other one: the engine returns the
+findings in its reply and the proxy saves them to that path, because a `read-only` engine cannot
+write it (`agents/proxy-teammate.md`).
+
+**The brief is also defined by what it leaves out.** It carries the task, the list of changed files
+and the diff range, and **nothing `unified-reviewer` produced**: no findings, no severities, no report
+file, no hint of what the first reviewer already suspects. Reading
 `reports/review-task{id}-unified-*.md` for the task under review is forbidden, and say so in the
 brief — a `read-only` sandbox does not enforce it, the engine can open those files perfectly well.
 An engine shown someone else's framing agrees with it; that is the whole reason for the rule.
 
-**Same rule applies to Mechanic A.** A one-shot external role gets the same prompt text the Claude
-one-shot agent would have received (the prompt printed in the phase document), plus the Output
-Contract.
+**The findings file is part of the contract, not bookkeeping.** `review-task{id}-second-r{round}.md`
+is where `unified-reviewer` expects the findings to be recorded, and Phase 3 counts those files to
+report how many SENSITIVE tasks actually got a second opinion (`phase3-verification.md`). A round that
+sends the message without writing the file is invisible in the summary.
+
+**What is spawned, on either engine** — the teammate is named `second-reviewer-{task id}` both times:
+
+| Resolved engine | Spawn |
+|-----------------|-------|
+| external | `Task(subagent_type="agent-teams:proxy-teammate", name="second-reviewer-{task id}", ...)` per Mechanic B, with the composed brief as its role brief. The proxy writes the findings file — a read-only engine cannot (`agents/proxy-teammate.md`). |
+| `claude` | `Task(subagent_type="agent-teams:unified-reviewer", name="second-reviewer-{task id}", ...)` — the agent file the composition starts from — with the findings-only contract at the top of the prompt, stating that it overrides that file's verdict and messaging sections **and the two `<role>` sentences named above**. Nothing translates for this instance and nothing stands between it and a coder, so the override has to be explicit. There is no `agent-teams:second-reviewer` subagent type. |
 
 ### Which roles transfer well
 
