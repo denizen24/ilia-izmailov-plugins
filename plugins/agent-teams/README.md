@@ -139,7 +139,7 @@ For complex features, 3 specialized Architects settle the specification before a
 5. **Handover** — each architect writes a ≤25-line review brief for its domain: what a reviewer must
    check in this feature, the traps found during the debate, which boundaries deserve suspicion
 6. **Stand down** — all three architects shut down, Primary included. The briefs go into the
-   reviewers' prompts, and reviewers do the code review from Phase 2 on.
+   reviewer's prompt, and the reviewer (unified-reviewer) does the code review from Phase 2 on.
 
 **Why they leave.** An architect is cheap in debate and expensive in review, because by review time it
 carries the whole debate transcript. Measured on real runs: an architect's debate turn cost ~36k
@@ -158,7 +158,7 @@ Coders receive their task along with gold standard examples — real files from 
 1. Reads gold standards and reference files
 2. Implements matching the same patterns
 3. Runs self-checks (build, lint, type check, convention checks)
-4. Sends review requests directly to reviewers via messaging
+4. Sends the review request directly to the reviewer via messaging
 5. Fixes feedback, gets approval, commits
 6. Writes a ≤10-line handover note and **stands down** — the next task gets a fresh coder
 
@@ -253,6 +253,7 @@ These conventions are used by `/team-feature` as few-shot examples for coders. R
 | `DECISIONS.md` | Tech Lead (MEDIUM); on COMPLEX Primary Architect during planning, then Lead | Architectural decisions, approved deviations, debate summary |
 | `VERIFICATION_PLAN.md` | Lead / Architects | Checklist of automated and manual checks |
 | `VERIFICATION_REPORT.md` | Verification phase | Detailed results with pass/fail/skip per check |
+| `PLAN.md` | Lead (only writer) | The task list: every task with files, criteria, blockers and status. Lead hands each task to a coder in its spawn prompt — no Claude Code task tools needed |
 | `state.md` | Lead | Team state for compaction recovery |
 
 ## Team Roles

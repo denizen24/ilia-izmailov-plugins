@@ -10,9 +10,8 @@ Feed rules: user's language, product terms, one entry per event, always include 
 
 | Event from team member | Action | 📢 Print to chat |
 |------------------------|--------|------------------|
-| Coder: `IN_REVIEW: task #N` | Update state.md (mark IN_REVIEW). | `🔎 Task #N in review: {short title}` |
-| Coder: `DONE: task #N` (any variant) | Update state.md (mark completed). If unassigned tasks remain AND active coders < max, spawn new coder with team roster. If coder claimed next task — no spawn needed. | Task-done digest — see "Task-Done Digest" below. |
-| Coder: `DONE: task #N. ALL MY TASKS COMPLETE` | Update state.md. Check if ALL coding tasks done → **change Phase in state.md to VERIFICATION and follow Phase 3 Instructions in state.md step by step.** If unassigned remain, spawn new coder. | Task-done digest. If transitioning: `🏁 All {N} tasks done — moving to verification.` |
+| Coder: `IN_REVIEW: task #N` | Set the task to `IN_REVIEW(coder-N)` in PLAN.md. | `🔎 Task #N in review: {short title}` |
+| Coder: `DONE: task #N` | Set the task to DONE in PLAN.md. **If Phase is already VERIFICATION** (a Phase 3 conventions, fix or cleanup task): return to the Phase 3 step that was waiting on it — do not restart Phase 3. Otherwise spawn a coder for every task that just became available (TODO, all blockers DONE) while active coders < max. If every coding task is DONE (the conventions task does not count) → **change Phase in state.md to VERIFICATION and follow Phase 3 Instructions in state.md step by step.** | Task-done digest — see "Task-Done Digest" below. If transitioning: `🏁 All {N} tasks done — moving to verification.` |
 | Coder: `QUESTION: task #N. [question]` | Answer from Phase 1 context if possible. If not — dispatch a researcher (Explore or general-purpose with WebSearch), then SendMessage the answer to coder. | Only if a researcher was dispatched: `🔍 Task #N raised a question ({what, in product terms}) — researching.` Answered-from-context questions are noise, don't print. |
 | Coder: `STUCK: task #N` | First, try to answer from Phase 1 context. Only dispatch a researcher if the problem requires reading code not yet seen. Then: adjust the task, split it, or reassign to a different coder. | `⏸️ Task #N stuck: {problem in product terms} — {what Lead is doing about it}` |
 | Coder: `LEGACY_FOUND: task #N` | Note it (entries are in LEGACY_REPORT.md; handled in Phase 3). | `🧹 Task #N left old code behind ({N} item(s)) — I'll ask you what to do with it at the end.` |
@@ -44,14 +43,13 @@ Full list in SKILL.md and state.md — in short: no reading or reviewing code, n
 
 ## State File Updates
 
-After every event, update `.claude/teams/{team-name}/state.md`:
-- Task status: UNASSIGNED → IN_PROGRESS(coder-N) → IN_REVIEW(coder-N) → COMPLETED
-- Coder spawns/shutdowns
-- Reviewer escalations
+After every event, update the run files:
+- `PLAN.md` — task status: TODO → IN_PROGRESS(coder-N) → IN_REVIEW(coder-N) → DONE. You are its only writer.
+- `state.md` — coder spawns/shutdowns, reviewer rotations, escalations
 
 ## Compaction Recovery
 
-If context feels incomplete or current state is unclear: read `.claude/teams/{team-name}/state.md` — it is self-describing (the **Phase** field tells which phase instructions to follow step by step; roster, task statuses, and exact commands are all there). Honor its `## Engines` section for later spawns — do NOT re-read `~/.claude/agent-teams.json` and do NOT re-probe the CLIs; if the section is absent, every role is Claude.
+If context feels incomplete or current state is unclear: read `.claude/teams/{team-name}/state.md` and `PLAN.md` — together they are self-describing (the **Phase** field in state.md tells which phase instructions to follow step by step; roster and exact commands are in state.md, task statuses in PLAN.md). Honor its `## Engines` section for later spawns — do NOT re-read `~/.claude/agent-teams.json` and do NOT re-probe the CLIs; if the section is absent, every role is Claude.
 
 ## When a Teammate Goes Quiet — Bounded Wait
 
@@ -80,14 +78,14 @@ Read the two together:
 | `launch`, nothing since | alive | **Working.** Engine runs vary from minutes to over an hour. Wait. |
 | `launch`, nothing since | gone | Engine died without the proxy noticing → treat as dead proxy |
 | `engine_done` / `checks_done`, nothing since ≥15 min | gone | **Dead proxy.** The work exists, the reporter does not |
-| `committed` but no DONE message | gone | Work is finished — just the message was lost. Mark the task complete and move on |
+| `committed` but no DONE message | gone | Work is finished — just the message was lost. Handle it exactly like a DONE event: mark the task DONE in PLAN.md and spawn coders for what it unblocks |
 
 ### When the verdict is "dead proxy"
 
 **Do not read the code and do not commit anything yourself.** Instead:
 
 1. `TaskStop` the silent teammate. Confirm it stopped.
-2. Spawn a **fresh coder** under a new name with a finishing brief:
+2. Spawn a **fresh coder** under a new name with a finishing brief, and set the task to `IN_PROGRESS({new name})` in PLAN.md:
    ```
    The engine already did the implementation for task {id}. Its report:
    .claude/teams/{team}/engine/{role}/{NNN}.out.md — read it.
@@ -108,12 +106,13 @@ the architects had. Measured on a real run with three reviewers: they took **55%
 and the heaviest one reached a 346k context and cost more than all eleven coders combined. With one
 reviewer doing all the reviews, it fills up three times as fast.
 
-**Rotate the reviewer every 3 completed tasks.** Rotation happens at a task boundary, never
-mid-review: wait until no REVIEW request is in flight.
+**Rotate the reviewer every 3 completed tasks.** Do not wait for a moment with no review in
+flight — with several coders in parallel that moment may never come. The reviewer finishes the
+review it is on, and anything that arrives during the handover is re-sent (step 3).
 
 1. SendMessage to unified-reviewer:
    ```
-   ROTATION. Write a standing-findings note to
+   ROTATION. Finish the review you are on and send it to its coder. Then write a standing-findings note to
    .claude/teams/{team-name}/reports/standing-unified-reviewer-{n}.md — at most 15 lines:
    - issues you saw repeat across more than one task
    - decisions already settled, so your successor does not reopen them
@@ -128,42 +127,29 @@ mid-review: wait until no REVIEW request is in flight.
    {contents of reports/standing-unified-reviewer-*.md — all of them, 15 lines each}
    --- END ---
    ```
-   If a coder's REVIEW request arrived during the handover, SendMessage that coder: "ROSTER UPDATE:
-   unified-reviewer was replaced — re-send your pending REVIEW request to unified-reviewer."
+   Then SendMessage every coder whose task is `IN_REVIEW` in PLAN.md: "ROSTER UPDATE: unified-reviewer
+   was replaced — if you are still waiting for a review, re-send your REVIEW request to unified-reviewer."
 4. 📢 `🔄 Ревьюер сменился — новый принял смену, накопленные наблюдения переданы.`
 
 The successor starts near 100k instead of 350k. What is lost is the memory of individual past
 reviews; what mattered — the cross-task patterns — is in the note, and every review itself is in
 `reports/`.
 
-**Do not rotate on a timer or on turn count.** Task boundaries are the only safe point.
+**Do not rotate on a timer or on turn count** — only on the completed-task counter.
 
 ## Spawning New Coders
 
-When a coder reports "DONE" and unassigned tasks remain:
-1. Update state.md (mark task completed)
-2. If active coders < max AND unassigned tasks exist (if the `coder` role is on an external engine per the `## Engines` section of state.md, spawn `agent-teams:proxy-teammate` with the same name and the coder role brief instead — see `engines.md` Mechanic B):
-   ```
-   Task(
-     subagent_type="agent-teams:coder",
-     team_name="feature-<short-name>",
-     name="coder-<N>",
-     prompt="You are Coder #{N}. Team: feature-<short-name>.
-
-   YOUR TEAM ROSTER:
-   {current roster from state.md}
-
-   {If foreign changes were present at Step 5, repeat the FOREIGN CHANGES block here —
-    re-run `git status --short` first, since the list may have grown mid-run.}
-
-   --- GOLD STANDARD EXAMPLES ---
-   {GOLD STANDARD BLOCK}
-   --- END GOLD STANDARDS ---
-
-   Claim your next task from the task list and start working."
-   )
-   ```
-3. Update state.md with new coder
+When a coder reports DONE:
+1. Set its task to DONE in PLAN.md.
+2. Find the tasks that are now available — Status TODO and every "Blocked by" task DONE.
+3. For each, while active coders < max: set it to `IN_PROGRESS(coder-N)` in PLAN.md, then spawn a
+   fresh coder with the **same prompt as Phase 1 Step 5** — roster from state.md, the task section
+   copied verbatim from PLAN.md, the gold standard block. If foreign changes were present at Step 5,
+   re-run `git status --short` and repeat the FOREIGN CHANGES block, since the list may have grown.
+   If the `coder` role is on an external engine per the `## Engines` section of state.md, spawn
+   `agent-teams:proxy-teammate` with the same name and the coder role brief instead — see
+   `engines.md` Mechanic B.
+4. Record the new coder in state.md.
 
 ## Stuck Protocol
 
@@ -171,12 +157,12 @@ When things go wrong, handle without involving the user:
 
 | Situation | Action |
 |-----------|--------|
-| Tech Lead rejects architecture > 2 times (MEDIUM) | Review the disagreement. Only dispatch a web researcher if genuinely lacking domain knowledge. Make the final call, document in DECISIONS.md. |
+| Tech Lead and a coder deadlock on an escalation (MEDIUM) | Review the disagreement. Only dispatch a web researcher if genuinely lacking domain knowledge. Make the final call, document in DECISIONS.md. |
 | Coder escalates "pattern doesn't fit" | MEDIUM: forward to Tech Lead. SIMPLE and COMPLEX: decide yourself — this is a scope question and you own the plan. Check the architect review briefs in `reports/` first, they often already answer it. If unsure, dispatch a web researcher. Document in DECISIONS.md. |
-| Build/tests fail after all tasks | Create targeted fix tasks. Only fix what's broken, don't redo completed work. |
+| Build/tests fail after all tasks | Add targeted fix tasks to PLAN.md and spawn coders for them. Only fix what's broken, don't redo completed work. |
 | A coder goes idle unexpectedly | **Never conclude an agent is dead from files not changing.** Message delivery between teammates can lag by tens of minutes, and an external engine can work for a long time without touching anything. Ask `STATUS?` and wait for an answer. Only after an explicit no-response — a second unanswered `STATUS?` well past any `ENGINE RUNNING` estimate — shut the coder down, confirm the shutdown, and only then spawn a replacement. **Never run two coders on the same files**; a duplicate destroys the first one's uncommitted work. |
 | A proxy teammate has been quiet for a long time | **Never guess from elapsed time — there is no expected duration, engine runs vary from two minutes to over an hour.** Establish the facts instead, in this order: (1) is the engine process alive? `ps -eo pid,etime,command \| grep -E 'codex (exec\|resume)\|grok\|kimi'`; (2) is the output file still growing? compare size and mtime a minute apart; (3) what does the output file already contain? If the process is alive or the file is growing → it is working, wait. If neither → the run has ended: read the output file, then ask the proxy to report. Only if the proxy itself does not answer twice do you shut it down and replace it. |
 | Need best practices mid-session | Dispatch a web researcher (general-purpose with WebSearch). Don't research yourself — protect context. |
-| Risk analysis reveals a CRITICAL confirmed risk requiring architectural change | Adjust the task list based on Tech Lead's recommendations. If the risk requires a fundamentally different approach — re-plan affected tasks and re-validate with Tech Lead. |
+| Risk analysis reveals a CRITICAL confirmed risk requiring architectural change | Adjust PLAN.md based on Tech Lead's recommendations. If the risk requires a fundamentally different approach — re-plan affected tasks and re-validate with Tech Lead. |
 | Risk tester and Tech Lead disagree on risk severity | Tech Lead's judgment takes priority — broader architectural context. Document the disagreement in DECISIONS.md. (Risk analysis happens in Phase 1, while architects are still present on COMPLEX.) |
 | Convention violations keep recurring | This is a signal: missing or unclear gold standard. Note it for Phase 3 conventions update. |

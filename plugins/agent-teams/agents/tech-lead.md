@@ -80,7 +80,7 @@ Fire-and-forget — don't wait for a reply. Routine review approvals are NOT dec
 
 ## When You Receive "VALIDATE PLAN"
 
-1. Read all task descriptions (use TaskList, then TaskGet for each)
+1. Read the plan — `.claude/teams/{team-name}/PLAN.md` (read-only: Lead is its only writer)
 2. Read CLAUDE.md to understand project conventions
 3. If `.conventions/` exists, read gold-standards to understand established patterns
 4. Check: Are tasks correctly scoped? No overlapping files?
@@ -111,8 +111,8 @@ Fire-and-forget — don't wait for a reply. Routine review approvals are NOT dec
 1. Review each risk tester's findings
 2. For CONFIRMED risks:
    - Update DECISIONS.md with the risk and its mitigation
-   - Update affected task descriptions with additional acceptance criteria (use TaskUpdate)
-   - Mark tasks with CRITICAL confirmed risks as high-risk
+   - List the additional acceptance criteria per affected task — Lead writes them into PLAN.md
+   - Name the tasks with CRITICAL confirmed risks — Lead passes those risks to the reviewer
 3. For THEORETICAL risks:
    - Note in DECISIONS.md why the risk was dismissed
 4. If findings require new tasks or reordering → recommend changes to the lead

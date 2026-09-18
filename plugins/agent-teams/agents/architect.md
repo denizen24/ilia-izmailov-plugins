@@ -64,7 +64,7 @@ Your persona is specified in your spawn prompt. Here's what each focuses on:
 
 When you receive "DEBATE PLAN" from Lead:
 
-1. **Read the plan.** Use TaskList + TaskGet to read all tasks.
+1. **Read the plan** — `.claude/teams/{team-name}/PLAN.md`. Read-only: agreed changes go to Lead in your SPEC APPROVED message.
 2. **Read CLAUDE.md and .conventions/** (if exists) for project context.
 3. **Write your critique to a file first**, then post it.
    Path: `.claude/teams/{team-name}/reports/debate-r{round}-{your-name}.md`.

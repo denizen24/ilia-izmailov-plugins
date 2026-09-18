@@ -2,14 +2,10 @@
 name: team-feature
 description: "Launch Agent Team for feature implementation with review gates (coders + a per-task reviewer + final verification). Use this skill whenever the user asks to 'build a feature', 'implement this', 'code this', 'add functionality', 'create a component/page/API', 'launch agent team', 'team feature', or gives any substantial implementation task that involves writing code across multiple files. Also use when the user describes a feature they want built — even if they don't explicitly say 'team' or 'agents'. This skill orchestrates parallel coders, each task reviewed for security, logic and quality, through a structured pipeline. Prefer this over doing implementation yourself whenever the task touches 3+ files or involves both frontend and backend changes."
 allowed-tools:
-  - TeamCreate
-  - TeamDelete
-  - SendMessage
-  - TaskCreate
-  - TaskGet
-  - TaskUpdate
-  - TaskList
+  - Agent
   - Task
+  - TaskStop
+  - SendMessage
   - Read
   - Write
   - Glob
@@ -155,9 +151,9 @@ Execute these steps in order:
 
 2. **Dispatch researchers** (conditional) — adaptive: skip what's already known. Codebase researcher for stack/structure, reference researcher for gold standard files, optional web researcher for best practices. Skip all if `--no-research` or brief provides everything.
 
-3. **Classify complexity** — mechanical algorithm with MEDIUM triggers (6 checks) and COMPLEX triggers (7 checks). Not overridable. Create team, write VERIFICATION_PLAN.md (SIMPLE/MEDIUM) or defer to architects (COMPLEX). Compile gold standard block for coders. Create tasks with acceptance criteria + convention checks.
+3. **Classify complexity** — mechanical algorithm with MEDIUM triggers (6 checks) and COMPLEX triggers (7 checks). Not overridable. Write VERIFICATION_PLAN.md (SIMPLE/MEDIUM) or defer to architects (COMPLEX). Compile gold standard block for coders. Write PLAN.md — every task with acceptance criteria + convention checks. Lead is its only writer.
 
-4. **Validate plan** — SIMPLE: skip. MEDIUM: Tech Lead validates. COMPLEX: 3 Architects debate via SendMessage (max 3 rounds), converge, one becomes Primary Architect, architects compile VERIFICATION_PLAN.md, then hand over review briefs and stand down.
+4. **Validate plan** — SIMPLE: skip. MEDIUM: Tech Lead validates. COMPLEX: 3 Architects debate via SendMessage (max 3 rounds), converge, one becomes Primary Architect, Lead compiles VERIFICATION_PLAN.md from their checks, then the architects hand over review briefs and stand down.
 
 4c-4. **Plan Brief to user — HARD GATE** (COMPLEX/MEDIUM; SIMPLE skips). See `phase1-planning.md` Step 4c-4.
 
@@ -174,8 +170,8 @@ Execute these steps in order:
 **Lead's role is MINIMAL in coordination — but not silent.** Coders communicate directly with the reviewer (and tech-lead for escalations) via SendMessage. Lead only:
 
 - Prints a progress feed line for every meaningful event (see Progress Feed table in `phase2-monitoring.md`)
-- Tracks progress in state.md (task status updates)
-- Spawns new coders when tasks complete and unassigned work remains (one task per coder — they stand down after it)
+- Tracks progress: task statuses in PLAN.md; roster, rotations and escalations in state.md
+- Hands out tasks from PLAN.md: marks a task DONE on the coder's report and spawns a coder, with the task in its prompt, for each task that became available (one task per coder — they stand down after it)
 - Rotates the reviewer every 3 completed tasks, so it does not accumulate the whole run
 - Handles STUCK/QUESTION/REVIEW_LOOP escalations (MEDIUM: tech-lead rules on escalations and review loops)
 - Detects a stalled teammate from the run ledger and the engine process — never by polling on a timer — and replaces it with a fresh finisher instead of doing the work itself
@@ -183,7 +179,7 @@ Execute these steps in order:
 
 **Lead does NOT:** read code, review code, run tests, notify the reviewer, or forward messages between team members.
 
-**Compaction recovery:** If context is lost, read `.claude/teams/{team-name}/state.md` — it contains the current phase, team roster, task statuses, and executable instructions for what to do next.
+**Compaction recovery:** If context is lost, read `.claude/teams/{team-name}/state.md` and `PLAN.md` — together they contain the current phase, team roster, task statuses, and executable instructions for what to do next.
 
 <!-- report-format-contract -->
 ### Output format: the "now → after" table
@@ -238,7 +234,7 @@ Execute in order:
 
 5. **Legacy cleanup** (team still alive) — HARD STEP: always run the scan, even if `LEGACY_REPORT.md` is empty; the user decides per item (Delete / Keep / Later). See `phase3-verification.md` Step 6.
 
-6. **Shutdown** — print summary (including legacy cleanup results), shutdown team, TeamDelete, present Human Checks to user.
+6. **Shutdown** — print summary (including legacy cleanup results), shut down the remaining teammates, present Human Checks to user.
 
 ## Everything Important Goes to a File
 
@@ -253,7 +249,7 @@ Per-run artifacts live in `.claude/teams/{team-name}/`:
 | `reports/` | Review findings, architect debate rounds, researcher / risk / verifier reports | Reviewers, architects, Lead |
 | `engine/` | Prompts, session ids and raw output of external CLI runs | Proxy teammates, Lead |
 | `ledger.jsonl` | One line per external engine run: role, task, session id, outcome. **The address of the engine's own recording** — Codex, Kimi and Grok each keep the full conversation themselves, so this is what makes theirs findable and resumable. Rebuildable with `scripts/engine-sessions.py` | Whoever launches the run |
-| root | `state.md`, `DECISIONS.md`, `VERIFICATION_PLAN.md`, `VERIFICATION_REPORT.md`, `LEGACY_REPORT.md` | Lead, Tech Lead / Primary Architect |
+| root | `PLAN.md` (the task list — Lead only), `state.md`, `DECISIONS.md`, `VERIFICATION_PLAN.md`, `VERIFICATION_REPORT.md`, `LEGACY_REPORT.md` | Lead, Tech Lead / Primary Architect |
 
 Rules:
 

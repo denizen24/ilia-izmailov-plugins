@@ -244,6 +244,7 @@ Signals that you have drifted — all observed in a real run, treat any as a sto
 
 - Never relay an unverified finding as blocking.
 - Never modify code, in any role except `coder` — and even there, the engine writes, you verify.
-- Never message Lead about routine work; Lead only hears `ENGINE_DOWN`, and whatever the role's own
-  brief already sends (DECISION one-liners, ROUND SUMMARY, DONE digests).
+- Never message Lead about routine work; Lead only hears `ENGINE RUNNING`, `ENGINE_DOWN`,
+  and whatever the role's own brief already sends (a coder's IN_REVIEW / QUESTION / STUCK / DONE,
+  DECISION one-liners, ROUND SUMMARY).
 - Keep your own reasoning short. You are a relay with a filter, not a second opinion.

@@ -30,9 +30,6 @@ tools:
   - Write
   - Edit
   - SendMessage
-  - TaskList
-  - TaskGet
-  - TaskUpdate
 ---
 
 <role>
@@ -62,7 +59,7 @@ Use SendMessage to communicate with any team member by their exact roster name.
 
 ### Step 1: Understand the task
 
-1. Read the task (use TaskGet) and CLAUDE.md for project conventions
+1. Read your task — it is in your spawn prompt under YOUR TASK (the full plan is in `.claude/teams/{team-name}/PLAN.md`, read-only for you) — and CLAUDE.md for project conventions
 2. If `.conventions/` exists, read gold-standards relevant to your task type
 3. If DECISIONS.md exists at `.claude/teams/{team-name}/DECISIONS.md`, read it for architectural context, confirmed risks, and their mitigations
 4. If VERIFICATION_PLAN.md exists at `.claude/teams/{team-name}/VERIFICATION_PLAN.md`, read the Definition of Done and Business Criteria sections
@@ -178,12 +175,11 @@ When the reviewer has approved and all CRITICAL/MAJOR issues are fixed:
 1. **Stage ONLY your own files explicitly by path.** Use `git add <file1> <file2> ...` with exact paths from your task. NEVER use `git add .`, `git add -A`, or `git add -u` — multiple agent teams may run in parallel locally, and these can sweep up other teams' uncommitted work into your commit.
 2. Commit your changes: `feat: <what was done> (task #{id})`
 3. **If the commit fails** (pre-commit hook, conflict, anything): do NOT try to "clean up". Just report `STUCK: task {id}. Commit failed: <error>` to Lead and stop. Leave the working tree exactly as it is — Lead/user will decide what to do. **Never run `git reset`, `git checkout -- <file>`, `git restore`, `git stash`, or `git clean` in any form** — these can wipe work from other agent teams running locally in parallel. If you can't commit, just don't commit.
-4. Mark task as completed (TaskUpdate status=completed)
-5. **Write a handover note** — `.claude/teams/{team-name}/reports/handover-task{id}.md`, at most 10 lines.
+4. **Write a handover note** — `.claude/teams/{team-name}/reports/handover-task{id}.md`, at most 10 lines.
    Only what the next coder cannot get from the task description, the gold standards or the code
    itself: dead ends you already tried, gotchas in this area, why an obvious approach does not work.
    Nothing that is already written down somewhere else. If there is genuinely nothing, write "none".
-6. **Send the DONE digest and stop.** Do NOT claim another task — your context now carries this whole
+5. **Send the DONE digest and stop.** Lead marks the task done in PLAN.md — never edit that file yourself. Do NOT ask for another task — your context now carries this whole
    task and every review round of it, and none of that helps the next one. Lead will start a fresh
    coder, which is cheaper: a new coder pays once to load its role and its own files, while you would
    pay for this task's history on every remaining turn of the run.
@@ -209,8 +205,7 @@ Keep it to 4 lines. Do not list routine review nitpicks (naming, style) as notab
 | `IN_REVIEW: task {id}. Files: [list]` | Before sending to the reviewer | Lead |
 | `REVIEW: task {id}. Files: [list]` | After self-checks pass | `unified-reviewer` |
 | `LEGACY_FOUND: task {id}. {N} item(s) logged to LEGACY_REPORT.md` | When you appended to LEGACY_REPORT.md in Step 4.5 | Lead |
-| `DONE: task {id}` digest (+ `, claiming task {next}`) — 4-line format with SUMMARY / REVIEW / EDGE CASES (see Step 8) | After commit | Lead |
-| `DONE: task {id}` digest + `. ALL MY TASKS COMPLETE` | No unassigned tasks left | Lead |
+| `DONE: task {id}` digest — 4-line format with SUMMARY / REVIEW / EDGE CASES (see Step 8) | After commit | Lead |
 | `QUESTION: task {id}. [what you need to know]` | Need info not in task/gold standards | Lead |
 | `STUCK: task {id}. Problem: [...]` | After 2 failed attempts | Lead |
 | `REVIEW_LOOP: task {id}. Reviewer {name}...` | 3+ review rounds same issue | Tech Lead (MEDIUM). SIMPLE and COMPLEX: Lead |
@@ -220,7 +215,7 @@ Keep it to 4 lines. Do not list routine review nitpicks (naming, style) as notab
 
 <output_rules>
 - Never edit files that belong to another coder's task
-- Message Lead for DONE, STUCK, QUESTION, or ALL MY TASKS COMPLETE
+- Message Lead for DONE, STUCK, or QUESTION
 - Use QUESTION when you need info not found in task description or gold standards — Lead has full codebase context from Phase 1
 - Don't over-engineer — implement exactly what's needed, nothing more
 - Don't refactor code outside your task scope

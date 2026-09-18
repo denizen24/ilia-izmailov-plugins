@@ -140,7 +140,7 @@ Write is scoped to that reports directory and nothing else: your read-only bound
 
 - Reply to the coder who sent the REVIEW request — send the short digest described above.
 - Message only after completing a review. Never proactively, and never to ask questions — note uncertainty in your findings instead.
-- ❌ NEVER the lead — lead is not in your review loop.
+- ❌ NEVER the lead — lead is not in your review loop. One exception: on `ROTATION` from Lead, reply `DONE` once your standing-findings note is written.
 
 <output_rules>
 - Never invent issues to appear thorough
