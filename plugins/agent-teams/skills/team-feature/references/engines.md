@@ -29,7 +29,15 @@ Canonical role IDs. These are the keys usable in the config `roles` block.
 | `architect` | teammate | Phase 1 Step 4c (COMPLEX) | claude, codex, kimi, grok, cursor |
 | `architect-frontend` / `architect-backend` / `architect-systems` | teammate | Phase 1 Step 4c | per-persona override of `architect` |
 | `unified-reviewer` | teammate | Phase 1 Step 5 (every level) | claude, codex, kimi, cursor |
+| `second-reviewer` | teammate, per task (`second-reviewer-{task id}`) | Phase 2, on demand (SENSITIVE task) | claude, codex, kimi, grok, cursor — **absent = off** |
 | `coder` | teammate | Phase 1 Step 5, Phase 2 | claude, codex **(experimental)** |
+
+`second-reviewer` is the one exception: it is off unless you list it. It gives a second *opinion*,
+never a second verdict — the coder still hears one verdict, from `unified-reviewer`. It is also the
+only role spawned per task rather than per run: Lead spawns a fresh `second-reviewer-{task id}` when
+`unified-reviewer` marks a task SENSITIVE, it sends its findings to that reviewer and stands down.
+Otherwise it is a teammate like any other and follows the mechanic below — including `engine: claude`,
+which is the useful assignment when `unified-reviewer` itself runs on an external engine.
 
 **Kind determines the mechanic:**
 
@@ -65,7 +73,8 @@ except (on invalid JSON) one warning line.
 }
 ```
 
-Any role not listed = `claude`.
+Any role not listed = `claude`. `second-reviewer` is the one exception: it is off unless you list it —
+a config that never mentions it gets no second opinion at all, not a Claude one.
 
 ### Full form
 
@@ -88,7 +97,7 @@ Any role not listed = `claude`.
 | Key | Meaning | Default |
 |-----|---------|---------|
 | `enabled` | Global kill switch. `false` → everything on Claude regardless of `roles`. | `true` |
-| `fallback` | What happens when an assigned CLI is missing or fails: `"claude"` (silent fallback) or `"fail"` (stop the run). | `"claude"` |
+| `fallback` | What happens when an assigned CLI is missing or fails: `"claude"` (silent fallback) or `"fail"` (stop the run). `second-reviewer` is exempt from both values: it is skipped, never substituted with `claude`, never fatal — a missing optional CLI must not stop a run. | `"claude"` |
 | `roles.<id>` | Engine name string, or object `{ engine, model?, effort?, sandbox? }`. `sandbox` is the role's access (`read-only` / `workspace-write`); engines without a sandbox flag map it through their preset — `cursor` turns it into its `mode` flags. | `"claude"` |
 | `engines.<name>` | Override the built-in preset (model, effort, or the full `cmd`/`resume` templates). | built-in presets below |
 
@@ -232,11 +241,30 @@ Run this before Phase 1 Step 1. It is cheap and must not be skipped when the con
 3. **Probe the CLIs actually referenced.** One Bash call:
    `command -v codex kimi grok cursor-agent` — only the binaries of engines that appear in
    `roles` (the `cursor` engine's binary is `cursor-agent`, never `agent`; see its preset).
-   Any missing binary → those roles fall back per `fallback`.
+   Any missing binary → those roles fall back per `fallback`. **`second-reviewer` is exempt from
+   both `"claude"` and `"fail"`**: a missing binary resolves it to `none` — it is skipped, never
+   substituted, never fatal. A missing optional CLI must not stop a run.
 4. **Build the engine table** — role ID → engine — and keep it for the whole run. Write it into
    `.claude/teams/{team-name}/state.md` under `## Engines` so it survives compaction.
    Role IDs that are not in the Role Registry belong to other plugins sharing this file
    (`team-research`, `zero-downtime-deploy`) — leave them out of the table and the 📢 line.
+
+   **Resolve `second-reviewer` here, once.** It becomes `none` when the key is absent, when its
+   binary is missing, or when its engine is the one `unified-reviewer` resolved to; otherwise it
+   becomes that engine. Record the outcome in the table like any other role
+   (`second-reviewer → codex`, or `second-reviewer → none`). `none` is not an engine assignment: it
+   is never printed, never appears in the 📢 line of step 5, and never makes that line print on a run
+   that would otherwise print nothing. Steps 1 and 2 short-circuit before this point, so a run with
+   no config, with `"enabled": false` or with `--engines=off` writes nothing and gets no second
+   opinion — which is the same thing, said with no output. `none` is what Phase 1 reads when it
+   decides whether `unified-reviewer`'s spawn prompt carries the `SECOND REVIEWER AVAILABLE: <engine>`
+   line (`phase1-planning.md`); without that line nothing else in the run changes.
+
+   The engine comparison is on the **resolved** engines in this table, and it happens here and
+   nowhere else — never re-evaluated mid-run. When the two are equal, warn once (a second opinion
+   from the same model as the first buys nothing) and treat the role as `none`:
+   `⚙️ second-reviewer на том же движке, что и unified-reviewer — второго мнения не будет; укажите
+   другой движок.`
 5. 📢 **Print one line** only if at least one role is non-claude:
    `⚙️ Движки: {role} → {engine}, {role} → {engine} (остальные — Claude)`
    And if anything fell back: `⚙️ {engine} не найден — {role} работает на Claude.`
@@ -324,6 +352,10 @@ normal Claude teammate under the same name, let it reply READY (a coder successo
 instead), then deliver that name's `OPEN` lines from `pending.log`,
 and send a ROSTER UPDATE to coders still waiting on it (phase2-monitoring.md, `ENGINE_DOWN`). Print `⚙️ {engine} недоступен — {role} работает на Claude.`
 
+`second-reviewer` has no successor: nothing is respawned, no ROSTER UPDATE is sent, Lead tells
+`unified-reviewer` `SECOND REVIEWER: none` for that task and the run goes on with the one reviewer it
+always had. The full recovery is in `phase2-monitoring.md`.
+
 ---
 
 ## Preparing the Role Brief
@@ -364,6 +396,13 @@ are absent:
 оркестратор доставит это адресату.
 ```
 
+**`second-reviewer` — the brief is also defined by what it leaves out.** It carries the task, the
+list of changed files and the diff range, and **nothing `unified-reviewer` produced**: no findings, no
+severities, no report file, no hint of what the first reviewer already suspects. Reading
+`reports/review-task{id}-unified-*.md` for the task under review is forbidden, and say so in the
+brief — a `read-only` sandbox does not enforce it, the engine can open those files perfectly well.
+An engine shown someone else's framing agrees with it; that is the whole reason for the rule.
+
 **Same rule applies to Mechanic A.** A one-shot external role gets the same prompt text the Claude
 one-shot agent would have received (the prompt printed in the phase document), plus the Output
 Contract.
@@ -371,7 +410,10 @@ Contract.
 ### Which roles transfer well
 
 Prefer to offload *read → produce a list* roles — reviewers, researchers, verifiers, `risk-tester`:
-self-contained work with citable, checkable output. Keep `tech-lead`, `architect`
+self-contained work with citable, checkable output. `second-reviewer` is the clearest case of all:
+its whole value is being a *different* model from the one `unified-reviewer` runs on, reading the
+same diff with a different blind spot. On the same engine as the first reviewer it adds nothing, and
+Step 0b resolves it to `none` for exactly that reason. Keep `tech-lead`, `architect`
 and `coder` on Claude — their value is judgment, cross-task memory,
 project-convention knowledge, and team protocol, the parts that do not survive a CLI boundary.
 This is guidance, not enforcement — the config allows any assignment in the registry — but when a
