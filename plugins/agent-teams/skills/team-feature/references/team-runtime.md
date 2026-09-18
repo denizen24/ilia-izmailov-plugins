@@ -106,7 +106,8 @@ Feature DoD applies — see VERIFICATION_PLAN.md
   `ALREADY ANSWERED: <its first line>` — no second review, no second message to the sender.
   Otherwise handle it normally and answer `<sender>` directly.
 - **Answer every request that reached you** before ending your turn — two REVIEW requests can
-  arrive in the same turn.
+  arrive in the same turn. A task you have announced as `SENSITIVE:` and are waiting on is not an
+  unanswered request — that coder's digest is owed when the wait ends, not in this turn.
 - **Exception — proxy teammates while their engine runs.** A proxy that launched its engine in the
   background stays in its turn until the engine process exits: it has nothing to be resumed by if it
   ends its turn early. "End your turn while waiting" applies to waiting on teammates, not on your engine.
@@ -157,7 +158,9 @@ work is unfinished and **no teammate or engine is running**:
    **Exception — a task listed in `## Second opinions` in state.md.** Its reviewer is parked waiting
    for a second opinion on that task — an opinion, never a second verdict — so resending that coder's
    REVIEW deepens the deadlock this check exists to break. Leave the REVIEW alone and handle the
-   task per "When a Second Opinion Does Not Come" in `phase2-monitoring.md`.
+   task per "When a Second Opinion Does Not Come" in `phase2-monitoring.md`. The line stays until
+   that task is DONE or you cancel the instance, so it is still there when the instance died without
+   a word — which is exactly the case this check has to catch.
 3. Only a teammate that ignores a `RESEND:` or a `STATUS?` is treated as stuck (phase2-monitoring.md).
 
 This check costs nothing on a healthy run: a team with a message in flight always has someone
