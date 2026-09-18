@@ -2,14 +2,11 @@
 name: team-research
 description: "Launch Agent Team for parallel deep codebase/topic research — causal understanding, not just coverage. Use this skill whenever the user asks to 'research the codebase', 'understand how X works', 'investigate', 'explore architecture', 'analyze the codebase', 'how does this work', 'deep dive into', 'trace how data flows', or needs thorough multi-angle investigation of code, architecture, or any technical topic. Also use when the user asks a complex question about the codebase that requires reading multiple files across different areas — a single grep won't cut it. Prefer this over ad-hoc exploration when the question spans multiple modules or needs causal understanding (WHY something exists, not just WHAT exists)."
 allowed-tools:
-  - TeamCreate
-  - TeamDelete
   - SendMessage
-  - TaskCreate
-  - TaskGet
-  - TaskUpdate
-  - TaskList
   - Task
+  - Agent
+  - TaskStop
+  - Write
   - Read
   - Glob
   - Grep
@@ -67,6 +64,34 @@ complexity = 1 (simple), 2 (medium), 3 (complex)
 
 Specialists and Critic are spawned ONLY on explicit signal. Do not pre-spawn.
 
+## Engines (optional)
+
+A role can run on another model through an external CLI (Codex, Kimi, Grok, Cursor) when
+`~/.claude/agent-teams.json` assigns it — the same file the `agent-teams` plugin reads. **No file →
+skip this section**: every role is Claude and nothing below changes.
+
+- **Before Phase 1:** resolve the engine table — `references/engines.md`, "Resolve Engines".
+- **At every spawn of `research-scout`, `research-challenger`, `research-critic` or
+  `research-specialist`** (the config IDs of the scout, challenger, critic and specialist): check the table. An
+  external engine means no `Task()` — run the delegated one-shot from `references/engines.md` with the
+  same prompt text shown below, and read its report as that agent's message to you.
+- `lead` and `investigator` always run on Claude.
+- Whatever an external engine reports is unverified until you open its `file:line` citations.
+
+## Team Runtime
+
+Current Claude Code has no `TeamCreate` / `TeamDelete` (the team is implicit) and offers
+`TaskCreate` / `TaskList` only to some models. So:
+
+- **No team lifecycle calls.** Teammates are background agents spawned with a `name`.
+- **The angle list is a file**, `.claude/teams/research-<topic-slug>/angles.md`, written by you.
+- **Investigators run in the background; every other role is a blocking `Task()`** — you wait for
+  the scout's, challenger's, critic's and specialists' reports before moving on.
+- **Investigators never message each other.** A message to a teammate whose turn has finished is
+  reported as sent and silently lost. Mid-run they message only you (`SendMessage(to="main")`):
+  a premise problem, or a `CONNECTION for investigator-X:` note. You forward the connection note
+  yourself — your own `SendMessage` to an investigator is always delivered, working or done.
+
 ## Protocol
 
 ### Phase 1: Plan (5-10 min)
@@ -77,12 +102,12 @@ Specialists and Critic are spawned ONLY on explicit signal. Do not pre-spawn.
    ```
    Task(
      subagent_type="team-research:scout",
-     team_name="research-<topic-slug>",
      name="scout",
      prompt="RESEARCH QUESTION: [question]
    Quick-scan the landscape and send findings to lead."
    )
    ```
+   `research-scout` on an external engine → the same prompt through `references/engines.md`, no `Task()`.
 
 2. **Based on Scout's report, define:**
    - **Angles** (3-7): independent, non-overlapping (MECE)
@@ -92,14 +117,11 @@ Specialists and Critic are spawned ONLY on explicit signal. Do not pre-spawn.
    - **Depth tier** per angle: shallow (structure mapping) or deep (causal understanding)
    - **Team size**: Use the formula above
 
-3. **Create team:**
-   ```
-   TeamCreate(team_name="research-<topic-slug>")
-   ```
+3. **Pick the run name** `research-<topic-slug>`. There is no team to create — the team is implicit.
 
-4. **Create tasks** (one per angle) via TaskCreate:
-   - Clear subject describing the angle
-   - Description with: what to investigate, where to start, explanation-based stop criteria, depth tier
+4. **Write the angle list** to `.claude/teams/research-<topic-slug>/angles.md` — one section per angle:
+   - `## investigator-<angle>` — the teammate name
+   - What to investigate, where to start, explanation-based stop criteria, depth tier
 
 ### Phase 2: Investigate (bulk of time)
 
@@ -107,24 +129,26 @@ Specialists and Critic are spawned ONLY on explicit signal. Do not pre-spawn.
    ```
    Task(
      subagent_type="team-research:investigator",
-     team_name="research-<topic-slug>",
+     run_in_background=true,
      name="investigator-<angle>",
      prompt="RESEARCH QUESTION: [the full question]
    YOUR ANGLE: [specific angle description]
    DEPTH TIER: [shallow/deep]
    START FROM: [file/dir entry point]
    STOP WHEN: [explanation-based stop criteria for this angle]
+   ALL ANGLES: .claude/teams/research-<topic-slug>/angles.md
 
-   Claim your task from the task list. Send findings to lead when done."
+   Your final reply is your report — it reaches lead when your turn ends."
    )
    ```
 
 2. **While investigators work:**
-   - If an investigator discovers something relevant to another angle → encourage cross-communication
+   - `CONNECTION for investigator-X: ...` from an investigator (a fact, a question, or an answer to a question) → forward it verbatim: `SendMessage(to="investigator-X", message="FROM: investigator-<sender>\n...")`. If X has already reported, add: "Answer with an addendum only if this changes a finding — not a new full report." Investigators do not message each other.
+   - `PREMISE INVALID: ...` → decide now whether to re-scope the angles; do not wait for the other reports.
    - If an investigator gets stuck → give hints about where to look
    - If angles turn out to overlap → redirect to avoid duplication
    - If an ESCALATE signal arrives → note it for Phase 3
-   - **Lead Pull:** You may request a one-sentence status from any investigator at any time ("What's your biggest finding so far?"). Use this to detect dead ends early or spot cross-cutting insights. Decide privately whether to redirect — do NOT share one investigator's content with others.
+   - **Lead Pull:** You may request a one-sentence status from any investigator at any time ("What's your biggest finding so far?"). Use this to detect dead ends early or spot cross-cutting insights. Decide privately whether to redirect — do NOT share one investigator's status answers with others (CONNECTION notes are the exception: they are addressed and meant to be forwarded).
 
 ### Phase 2.5: Cross-Pollinate (5 min)
 
@@ -152,7 +176,6 @@ Spawn a **Challenger agent:**
 ```
 Task(
   subagent_type="team-research:research-challenger",
-  team_name="research-<topic-slug>",
   name="challenger",
   prompt="RESEARCH QUESTION: [the full question]
 
@@ -166,6 +189,10 @@ Stress-test these findings and send your assessment to lead."
 )
 ```
 
+`research-challenger` on an external engine → the same prompt, with every investigator's findings
+pasted into the prompt file, through `references/engines.md`. Its report arrives from the output file
+instead of a message; everything after this point is unchanged.
+
 **After Challenger reports:**
 
 1. **Send targeted questions** back to relevant investigators (via SendMessage)
@@ -174,13 +201,14 @@ Stress-test these findings and send your assessment to lead."
    ```
    Task(
      subagent_type="team-research:critic",
-     team_name="research-<topic-slug>",
      name="critic",
      prompt="FLAGGED AREAS: [What Challenger flagged as insufficient]
 
    Analyze failure modes for these areas and send findings to lead."
    )
    ```
+   `research-critic` on an external engine → the same prompt, with the flagged areas pasted into the prompt
+   file, through `references/engines.md`, no `Task()`.
 4. **If ESCALATE flags exist:** spawn specialist agents (max 2, prioritize by severity)
 
 **Rules:**
@@ -193,17 +221,19 @@ Stress-test these findings and send your assessment to lead."
 ```
 Task(
   subagent_type="team-research:specialist",
-  team_name="research-<topic-slug>",
   name="specialist-<domain>",
   prompt="DOMAIN: [domain]
 CONTEXT: Investigator [name] found [what] in [file:line].
 ESCALATE DETAILS: [what was flagged and why]
 
 Deep-review the flagged area using Depth Protocol (WHAT/WHY/FRAGILITY with Source Tags).
-Send findings to lead, then mark your task complete.
+Your final reply is your report.
 Keep it focused — don't expand beyond the flagged area."
 )
 ```
+
+`research-specialist` on an external engine → the same prompt, with the ESCALATE details pasted into the
+prompt file, through `references/engines.md`, no `Task()`.
 
 <!-- report-format-contract -->
 ### Output format: the "now → after" table
@@ -253,6 +283,7 @@ After Challenge passes (or after re-investigation round):
 
 **Date:** [timestamp]
 **Team:** [count] investigators + [count] challenger/critic/specialists
+**Engines:** [role → engine/model for every non-Claude role, or "all Claude"]
 **Angles covered:** [list]
 **Feynman Test pass rate:** [X of Y findings pass explain/example/predict]
 
@@ -311,14 +342,13 @@ Present both sides with source tags — let the reader decide.]
 Include source tags for each recommendation's evidence base.]
 ```
 
-2. Shut down all team members
-3. TeamDelete to clean up
-4. Present report to user
+2. Stop any teammate still running (`TaskStop`). Finished teammates need nothing — there is no team to delete
+3. Present report to user
 
 ## Key Rules
 
 - **Depth > Coverage** — 3 well-explained findings beat 10 surface observations
-- **Investigators can talk to each other** — encourage cross-pollination
+- **Investigators do not talk to each other** — they send you `CONNECTION for investigator-X` notes mid-run, and you forward each one as it arrives, without waiting for reports
 - **You are the synthesizer and cross-pollinator** — find connections investigators can't see alone
 - **Preserve Source Tags** — Observed/Inferred/Hypothesized must appear in the final report
 - **Preserve file:line references** — these are the evidence, don't lose them

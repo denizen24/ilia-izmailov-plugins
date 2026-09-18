@@ -4,7 +4,9 @@ Launch a team of AI agents to implement features with built-in code review gates
 
 ## Prerequisites
 
-> **Agent teams are experimental and disabled by default.** You need to enable them before using this plugin.
+> **Agent teams are experimental and disabled by default.** Enabling them is recommended. The pipeline itself
+> does not depend on the flag: teammates are named background agents and Lead relays their messages, so
+> it also runs with teams off.
 
 Add `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` to your `settings.json` or environment:
 
@@ -24,6 +26,20 @@ export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
 ```
 
 Restart Claude Code after enabling.
+
+### How the team talks (Claude Code 2.1.178+)
+
+Current Claude Code has no `TeamCreate` / `TeamDelete` — every session has one implicit team — and
+offers `TaskCreate` / `TaskList` only to some models (not to Opus 5 by default). A message from one
+teammate to another whose turn has already finished is reported as sent and never delivered. So the
+plugin:
+
+- keeps the plan in `.claude/teams/<team>/tasks.md`, owned by Lead;
+- routes every teammate-to-teammate message through Lead: the sender writes `TO: <names>` on the
+  first line, Lead forwards it verbatim and never reads the code it points to;
+- ends a run by stopping whatever is still running — there is no team to delete.
+
+Details and the delivery measurements: `skills/team-feature/references/team-runtime.md`.
 
 ## Installation
 
@@ -133,13 +149,13 @@ Risk Testers are spawned in parallel — one per CRITICAL/MAJOR risk. Confirmed 
 For complex features, 3 specialized Architects settle the specification before any code is written:
 
 1. **Spawn 3 Architects** — Frontend (UI/components/accessibility), Backend (API/DB/data integrity), Systems (testing/CI/DX)
-2. **Debate phase** — each architect critiques the plan from their expertise, debates with others via direct messaging (max 3 rounds)
+2. **Debate phase** — each architect critiques the plan from their expertise, debates with others through Lead relay (max 3 rounds)
 3. **Verification checks** — each architect contributes checks from their domain to the verification plan
 4. **Convergence** — architects send "SPEC APPROVED" with final recommendations
 5. **Handover** — each architect writes a ≤25-line review brief for its domain: what a reviewer must
    check in this feature, the traps found during the debate, which boundaries deserve suspicion
 6. **Stand down** — all three architects shut down, Primary included. The briefs go into the
-   reviewers' prompts, and reviewers do the code review from Phase 2 on.
+   reviewer's prompt, and the reviewer does the code review from Phase 2 on.
 
 **Why they leave.** An architect is cheap in debate and expensive in review, because by review time it
 carries the whole debate transcript. Measured on real runs: an architect's debate turn cost ~36k
@@ -158,7 +174,7 @@ Coders receive their task along with gold standard examples — real files from 
 1. Reads gold standards and reference files
 2. Implements matching the same patterns
 3. Runs self-checks (build, lint, type check, convention checks)
-4. Sends review requests directly to reviewers via messaging
+4. Sends one review request addressed to the reviewer; Lead relays it
 5. Fixes feedback, gets approval, commits
 6. Writes a ≤10-line handover note and **stands down** — the next task gets a fresh coder
 
@@ -173,7 +189,7 @@ in the run.
 
 **Review — one pass per task**
 
-Coders drive the review process — they message the reviewer directly. Lead is NOT in the review loop.
+Coders drive the review process. Every message between teammates travels through Lead, which forwards it verbatim and stays out of the code — see "How the team talks" above.
 
 Every task, at every complexity level, passes two gates before commit:
 
@@ -259,12 +275,12 @@ These conventions are used by `/team-feature` as few-shot examples for coders. R
 
 | Role | Lifetime | Purpose |
 |------|----------|---------|
-| **Lead** | Whole session | Orchestrates pipeline, dispatches researchers, monitors progress |
+| **Lead** | Whole session | Orchestrates pipeline, dispatches researchers, relays messages, monitors progress |
 | **Codebase Researcher** | One-shot | Returns condensed project summary (structure, stack, patterns) |
 | **Reference Researcher** | One-shot | Returns full content of best example files for each layer |
 | **Tech Lead** | Permanent (MEDIUM) | Validates plan, identifies risks, rules on escalations, maintains DECISIONS.md, final cross-task check. Does not review tasks |
-| **Architect** | Debate only (COMPLEX) | Debates spec, writes a domain review brief, stands down. 3 personas: Frontend, Backend, Systems |
-| **Coder** | Per task | Implements matching gold standards, self-checks, requests review directly |
+| **Architect** | Debate only (COMPLEX) | Debates spec in Lead-run rounds, writes a domain review brief, stands down. 3 personas: Frontend, Backend, Systems |
+| **Coder** | Per task | Implements matching gold standards, self-checks, requests review through Lead relay |
 | **Unified Reviewer** | Permanent, rotated every 3 tasks | The one per-task review: security, logic, fit with the plan, quality |
 | **Risk Tester** | One-shot | Verifies specific risks by reading code and running test scripts |
 | **CI Verifier** | One-shot | Runs build, typecheck, lint, tests — reports PASS/FAIL/BROKEN |
@@ -294,7 +310,7 @@ Copy `agent-teams.example.json` to `~/.claude/agent-teams.json` and change only 
 }
 ```
 
-Supported engines: `claude` (default), `codex`, `kimi`, `grok`.
+Supported engines: `claude` (default), `codex`, `kimi`, `grok`, `cursor`.
 
 How each kind of role is moved:
 
@@ -327,7 +343,7 @@ Guarantees that hold regardless of configuration:
 - `--engines=off` on a single run ignores the config entirely.
 
 Nothing is duplicated for safekeeping: each engine already records its own full conversation
-(`~/.codex/sessions/`, `~/.kimi-code/sessions/`, `~/.grok/sessions/`), so a run only records the
+(`~/.codex/sessions/`, `~/.kimi-code/sessions/`, `~/.grok/sessions/`, `~/.cursor/chats/`), so a run only records the
 *address* — one line per engine call in `.claude/teams/<team>/ledger.jsonl`. If even that is lost,
 `scripts/engine-sessions.py <project>` rebuilds the map from the engines' own stores and prints a
 ready `resume` command for each session.

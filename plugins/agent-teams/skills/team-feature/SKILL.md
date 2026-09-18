@@ -2,14 +2,10 @@
 name: team-feature
 description: "Launch Agent Team for feature implementation with review gates (coders + a per-task reviewer + final verification). Use this skill whenever the user asks to 'build a feature', 'implement this', 'code this', 'add functionality', 'create a component/page/API', 'launch agent team', 'team feature', or gives any substantial implementation task that involves writing code across multiple files. Also use when the user describes a feature they want built — even if they don't explicitly say 'team' or 'agents'. This skill orchestrates parallel coders, each task reviewed for security, logic and quality, through a structured pipeline. Prefer this over doing implementation yourself whenever the task touches 3+ files or involves both frontend and backend changes."
 allowed-tools:
-  - TeamCreate
-  - TeamDelete
   - SendMessage
-  - TaskCreate
-  - TaskGet
-  - TaskUpdate
-  - TaskList
   - Task
+  - Agent
+  - TaskStop
   - Read
   - Write
   - Glob
@@ -82,7 +78,7 @@ The `.conventions/` directory is the **single source of truth** for project patt
 ## Engines — Who Backs Each Role
 
 Every role runs on **Claude by default**. A user MAY reassign individual roles to an external CLI
-agent (Codex, Kimi, Grok) in `~/.claude/agent-teams.json` — external work bills against a different
+agent (Codex, Kimi, Grok, Cursor) in `~/.claude/agent-teams.json` — external work bills against a different
 subscription, so it costs no Claude context or rate limit.
 
 - **No config file → nothing changes.** This is the stock path and must stay zero-cost: Step 0b exits
@@ -90,7 +86,7 @@ subscription, so it costs no Claude context or rate limit.
 - **One-shot roles** on an external engine are not spawned as Claude agents at all — the spawner
   runs the CLI via Bash and reads the report.
 - **Teammate roles** on an external engine are spawned as `agent-teams:proxy-teammate` under the
-  same name. The team shape is unchanged: coders still message `unified-reviewer` and get a normal
+  same name. The team shape is unchanged: coders still address `unified-reviewer` and get a normal
   review back; the proxy delegates the thinking and triages the result before relaying it.
 - **`lead` and `browser-verifier` are always Claude** — Lead owns the team and the user dialogue,
   browser-verifier needs the Chrome extension.
@@ -101,16 +97,24 @@ subscription, so it costs no Claude context or rate limit.
 **Step 0b:** resolve the engine table per `references/engines.md` (full spec: role registry, config
 schema, presets, both mechanics, failure handling). No config file → one Read and exit.
 
+## Team Runtime — Read Before Spawning Anyone
+
+> **Full details:** `references/team-runtime.md`
+
+- **The team is implicit.** No `TeamCreate` / `TeamDelete`; teammates are background agents spawned with a `name`.
+- **The plan is a file**, `.claude/teams/{team-name}/tasks.md` — not `TaskCreate`, which current Claude Code offers only to some models.
+- **Every message between teammates goes through Lead.** A message from one teammate to another whose turn has finished is reported as sent and silently lost. Teammates send `TO: <names>` + body to Lead; Lead forwards it verbatim, one `SendMessage` per recipient, without reading code.
+
 ## Roles
 
 | Role | Lifetime | Communicates with | Responsibility |
 |------|----------|-------------------|----------------|
-| **Lead** | Whole session | Everyone (sparingly) | Dispatch researchers, plan, spawn team, monitor DONE/STUCK in Phase 2, narrate the progress feed to the user |
+| **Lead** | Whole session | Everyone; relays every teammate-to-teammate message | Dispatch researchers, plan, spawn team, relay messages, monitor DONE/STUCK in Phase 2, narrate the progress feed to the user |
 | **Researcher** | One-shot | Lead only | Explore codebase or web, return findings with FULL file content |
-| **Tech Lead** (MEDIUM) | Whole session | Lead (planning) + Coders (escalations only) | Validate plan, risks, rule on escalations, DECISIONS.md, final cross-task check. Does not review tasks |
-| **Coder** | Per task | Reviewer (directly), Lead (DONE/STUCK) | Implement, self-check, request review directly, fix feedback, commit |
-| **Unified Reviewer** | Whole session (rotated) | Coder only | The one per-task review at every level: security, logic, fit with plan, quality |
-| **Architect** (COMPLEX) | Debate only | Other Architects + Lead | Debate the spec, then write a domain review brief and stand down — all three, Primary included. Review goes to the reviewer, decisions to Lead, the final consistency check to a one-shot agent. |
+| **Tech Lead** (MEDIUM) | Whole session | Lead (planning) + Coders (escalations only, via Lead relay) | Validate plan, risks, rule on escalations, DECISIONS.md, final cross-task check. Does not review tasks |
+| **Coder** | Per task | Reviewer (via Lead relay), Lead (DONE/STUCK) | Implement, self-check, request review, fix feedback, commit |
+| **Unified Reviewer** | Whole session (rotated) | Coder only (via Lead relay) | The one per-task review at every level: security, logic, fit with plan, quality |
+| **Architect** (COMPLEX) | Debate only | Lead (round files carry the argument between architects) | Debate the spec, then write a domain review brief and stand down — all three, Primary included. Review goes to the reviewer, decisions to Lead, the final consistency check to a one-shot agent. |
 
 ## Review Model — One Reviewer per Task, Global Checks at the End
 
@@ -155,9 +159,9 @@ Execute these steps in order:
 
 2. **Dispatch researchers** (conditional) — adaptive: skip what's already known. Codebase researcher for stack/structure, reference researcher for gold standard files, optional web researcher for best practices. Skip all if `--no-research` or brief provides everything.
 
-3. **Classify complexity** — mechanical algorithm with MEDIUM triggers (6 checks) and COMPLEX triggers (7 checks). Not overridable. Create team, write VERIFICATION_PLAN.md (SIMPLE/MEDIUM) or defer to architects (COMPLEX). Compile gold standard block for coders. Create tasks with acceptance criteria + convention checks.
+3. **Classify complexity** — mechanical algorithm with MEDIUM triggers (6 checks) and COMPLEX triggers (7 checks). Not overridable. Pick the team name, write VERIFICATION_PLAN.md (SIMPLE/MEDIUM) or defer to architects (COMPLEX). Compile gold standard block for coders. Write tasks.md with acceptance criteria + convention checks.
 
-4. **Validate plan** — SIMPLE: skip. MEDIUM: Tech Lead validates. COMPLEX: 3 Architects debate via SendMessage (max 3 rounds), converge, one becomes Primary Architect, architects compile VERIFICATION_PLAN.md, then hand over review briefs and stand down.
+4. **Validate plan** — SIMPLE: skip. MEDIUM: Tech Lead validates. COMPLEX: 3 Architects debate in Lead-run rounds (max 3), converge, one becomes Primary Architect, architects compile VERIFICATION_PLAN.md, then hand over review briefs and stand down.
 
 4c-4. **Plan Brief to user — HARD GATE** (COMPLEX/MEDIUM; SIMPLE skips). See `phase1-planning.md` Step 4c-4.
 
@@ -171,7 +175,9 @@ Execute these steps in order:
 
 > **Full details:** `references/phase2-monitoring.md`
 
-**Lead's role is MINIMAL in coordination — but not silent.** Coders communicate directly with the reviewer (and tech-lead for escalations) via SendMessage. Lead only:
+**Lead's role is MINIMAL in coordination — but not silent.** Coders drive their own review loop with the reviewer (and tech-lead for escalations on MEDIUM); Lead carries their messages. Lead only:
+
+- Relays every `TO:` message verbatim to the named teammates (`references/team-runtime.md` §3)
 
 - Prints a progress feed line for every meaningful event (see Progress Feed table in `phase2-monitoring.md`)
 - Tracks progress in state.md (task status updates)
@@ -181,7 +187,7 @@ Execute these steps in order:
 - Detects a stalled teammate from the run ledger and the engine process — never by polling on a timer — and replaces it with a fresh finisher instead of doing the work itself
 - Transitions to Phase 3 when ALL coding tasks complete
 
-**Lead does NOT:** read code, review code, run tests, notify the reviewer, or forward messages between team members.
+**Lead does NOT:** read code, review code, run tests, pick reviewers, wait for verdicts, or edit, summarise or judge the messages it relays.
 
 **Compaction recovery:** If context is lost, read `.claude/teams/{team-name}/state.md` — it contains the current phase, team roster, task statuses, and executable instructions for what to do next.
 
@@ -228,7 +234,7 @@ Write the table in the language the user is speaking.
 
 Execute in order:
 
-1. **Conventions update** — assign the conventions task to a coder.
+1. **Conventions update** — spawn a fresh coder for the conventions task id.
 
 2. **Cross-task consistency check** — Tech Lead (MEDIUM), or a one-shot Explore agent over the combined diff (SIMPLE/COMPLEX).
 
@@ -238,7 +244,7 @@ Execute in order:
 
 5. **Legacy cleanup** (team still alive) — HARD STEP: always run the scan, even if `LEGACY_REPORT.md` is empty; the user decides per item (Delete / Keep / Later). See `phase3-verification.md` Step 6.
 
-6. **Shutdown** — print summary (including legacy cleanup results), shutdown team, TeamDelete, present Human Checks to user.
+6. **Shutdown** — print summary (including legacy cleanup results), stop any teammate still running (no team to delete — `team-runtime.md` §4), present Human Checks to user.
 
 ## Everything Important Goes to a File
 
@@ -252,8 +258,8 @@ Per-run artifacts live in `.claude/teams/{team-name}/`:
 |-----------|-----------------|-----------|
 | `reports/` | Review findings, architect debate rounds, researcher / risk / verifier reports | Reviewers, architects, Lead |
 | `engine/` | Prompts, session ids and raw output of external CLI runs | Proxy teammates, Lead |
-| `ledger.jsonl` | One line per external engine run: role, task, session id, outcome. **The address of the engine's own recording** — Codex, Kimi and Grok each keep the full conversation themselves, so this is what makes theirs findable and resumable. Rebuildable with `scripts/engine-sessions.py` | Whoever launches the run |
-| root | `state.md`, `DECISIONS.md`, `VERIFICATION_PLAN.md`, `VERIFICATION_REPORT.md`, `LEGACY_REPORT.md` | Lead, Tech Lead / Primary Architect |
+| `ledger.jsonl` | One line per external engine run: role, task, session id, outcome. **The address of the engine's own recording** — Codex, Kimi, Grok and Cursor each keep the full conversation themselves, so this is what makes theirs findable and resumable. Rebuildable with `scripts/engine-sessions.py` | Whoever launches the run |
+| root | `state.md`, `tasks.md`, `relay.log`, `DECISIONS.md`, `VERIFICATION_PLAN.md`, `VERIFICATION_REPORT.md`, `LEGACY_REPORT.md` | Lead, Tech Lead / Primary Architect |
 
 Rules:
 
@@ -272,6 +278,7 @@ Rules:
 
 ## Reference Files
 
+- `references/team-runtime.md`
 - `references/phase1-planning.md`
 - `references/phase2-monitoring.md`
 - `references/engines.md`
