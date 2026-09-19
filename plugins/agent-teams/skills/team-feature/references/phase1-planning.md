@@ -715,11 +715,24 @@ Definition of Done: {DoD from Step 3}
 Gold standard references: {list reference files from researcher findings or .conventions/}
 Confirmed risks from risk analysis: {CONFIRMED risks from Step 4b — MEDIUM/COMPLEX; omit on SIMPLE}
 DECISIONS.md: .claude/teams/{team-name}/DECISIONS.md — re-read it before each review (if it exists)
+SECOND REVIEWER AVAILABLE: {engine}
 
 REVIEW requests come directly from coders; reply directly to the coder (see "How messages travel" in your agent file).
 Pay special attention to the confirmed risks above — verify that code properly addresses their mitigations.
 Now reply READY and end your turn — the first REVIEW request wakes you.")
 ```
+
+**The `SECOND REVIEWER AVAILABLE:` line goes in only when there is one.** It tells the reviewer that
+this run has a `second-reviewer` — a second *opinion* on a task the reviewer itself marks SENSITIVE,
+not a second verdict. Include the line if — and only if — `## Engines` in state.md gives
+`second-reviewer` an engine. Step 0b already decided that: it records `none` when the role is absent
+from the config, when its CLI is missing, or when its engine equals `unified-reviewer`'s, and that
+decision is never re-evaluated. On `none`, and on every run without an engine config, **drop the
+whole line** — no placeholder, no `none`, no empty value. Its absence is what keeps the
+second-opinion section of the reviewer's agent file inert, so an invented value turns the feature on
+for a run that has nothing to turn on. The reviewer never re-reads the config, so this line is the
+only way it learns the answer — and every later spawn of `unified-reviewer` has to carry it again
+(Step 5a-3 below, and the rotation respawn in `phase2-monitoring.md`).
 
 **For COMPLEX** — architects hand over and stand down first; then the reviewer is spawned with their
 briefs.
@@ -774,6 +787,10 @@ instead of carrying a debate transcript through the whole run.
 {contents of reports/review-brief-*.md — all three, they are 25 lines each}
 --- END BRIEFS ---
 ```
+
+"Exactly as above" includes the `SECOND REVIEWER AVAILABLE:` line, on the same condition and in the
+same place in the prompt. Nothing reports its absence: a COMPLEX reviewer spawned without it simply
+never asks for a second opinion, and the run looks normal.
 
 The reviewer starts narrow (~90k) and stays narrow, which is the entire point of the swap.
 

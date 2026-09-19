@@ -358,6 +358,7 @@ Risk analysis (pre-implementation):
 Review stats (post-implementation):
   Security: N found & fixed | Logic: N | Quality: N   (by finding category in the review reports)
   Convention violations: N | Escalations: N
+  Second opinion on {engine}: N task(s) | Findings offered: N | Confirmed: N
 
 Verification:
   Automated checks: {N}/{total} passed
@@ -376,6 +377,20 @@ Definition of Done: {static criteria met / partial}
 Runtime verification: {N/A if no human checks | PENDING — see Human Checks below}
 ══════════════════════════════════════════════════
 ```
+
+**The `Second opinion` line prints only when a second opinion actually ran** — no `second-reviewer`
+in the Step 0b table, or no task marked SENSITIVE, and the line is omitted entirely. Not `0`, not
+"none": on a stock run this block is byte-identical to what it was before the feature existed.
+
+Take the numbers off disk — Lead never read the review reports, and a compaction may have taken the
+rest of the run with it:
+
+- **Tasks covered:** `ls .claude/teams/{team-name}/reports/review-task*-second-r*.md | wc -l`
+- **Findings confirmed:** `grep -h '\[second:' .claude/teams/{team-name}/reports/review-task*-unified-r*.md | wc -l`
+- **Findings offered:** confirmed plus the lines under the `### Not confirmed (second opinion)`
+  headings in the same files. Those lines carry no severity token on purpose — they count here and
+  nowhere else, never in the Security / Logic / Quality counts above.
+- **Engine:** the `second-reviewer` row of the Step 0b table.
 
 ## 8. Shutdown Team
 
