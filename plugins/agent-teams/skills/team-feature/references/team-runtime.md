@@ -108,9 +108,10 @@ Feature DoD applies — see VERIFICATION_PLAN.md
 - **Answer every request that reached you** before ending your turn — two REVIEW requests can
   arrive in the same turn. A task you have announced as `SENSITIVE:` and are waiting on is not an
   unanswered request — that coder's digest is owed when the wait ends, not in this turn.
-- **Exception — proxy teammates while their engine runs.** A proxy that launched its engine in the
-  background stays in its turn until the engine process exits: it has nothing to be resumed by if it
-  ends its turn early. "End your turn while waiting" applies to waiting on teammates, not on your engine.
+- **Exception — proxy teammates while their engine runs.** A proxy launches its engine through
+  `scripts/run-engine.sh` and keeps a background `until [ -f <out>.done ]` running until the reply is
+  relayed: that wait is what resumes it, so it never ends a turn with the engine unwatched. "End your
+  turn while waiting" applies to waiting on teammates, not on your engine.
 - Keep messages short: verdict and file path. Detail lives in `reports/` (SKILL.md, "Everything
   Important Goes to a File").
 
@@ -155,8 +156,11 @@ construction and its absence changes no verdict. Counting it would mean one inst
 working without ending its turn — a hung engine call, a subagent turn that never returns — leaves the
 check disarmed for the rest of the run, and a reviewer parked on that task waits for something nobody
 is watching for. So: run this check whenever every teammate **other than** a `second-reviewer-{id}` is
-idle, and treat each line in `## Second opinions` per step 2 below. Cancelling a live instance costs
-the run one optional opinion on one task; not cancelling a dead one costs the run.
+idle, and treat each line in `## Second opinions` per step 2 below. That step reads the engine's
+`.done` marker first: an engine still `RUNNING` under `scripts/run-engine.sh` is bounded by its
+`--timeout` and is waited for, not cancelled — the reviewer's verdict on that task waits for it by
+design. Cancelling an instance with no running engine costs the run one optional opinion on one task;
+not cancelling a dead one costs the run.
 
 Then:
 

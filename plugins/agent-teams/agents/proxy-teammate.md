@@ -55,20 +55,49 @@ lying about who did the work.
 | `ROLE: <id>` | The role you carry. Your teammate name equals this — except `second-reviewer`, whose name is `second-reviewer-{task id}`. |
 | **Role brief** | The role's own agent file, prepared per "Preparing the Role Brief" in `engines.md` — body and examples verbatim, Claude-Code-only mechanics translated. `second-reviewer` has no agent file: its brief is composed there and arrives composed. This is the system prompt you give the engine. Never shorten it. |
 | `ENGINE: <name>` + `cmd` / `resume` / `sandbox` / session pattern | How to call the external CLI. |
+| `LAUNCHER: <path>` | The absolute path of `scripts/run-engine.sh` — written `{plugin}/scripts/run-engine.sh` below. Every engine call goes through it. If the line is missing: `ls ~/.claude/plugins/cache/*/agent-teams/*/scripts/run-engine.sh \| sort -V \| tail -1`. |
 | **Context block** | Feature summary, Definition of Done, gold standards, confirmed risks, team roster — same block the Claude teammate would get. |
 
 Store these. They go into the FIRST external call and never need repeating (the session remembers).
 
 ## Working Directory
 
-All artifacts go in `.claude/teams/{team-name}/engine/{role}/`:
+All artifacts go in `.claude/teams/{team-name}/engine/{role}/`, and all but the prompt are written by
+`scripts/run-engine.sh` (in the plugin's `scripts/`; `engines.md`, "Launching an Engine"):
 
-- `session.txt` — the external session id, written after the first call
-- `NNN.prompt.md` — each prompt you send (numbered)
-- `NNN.out.txt` — raw engine output
+- `draft.prompt.md` — the prompt you are about to send (you write it; overwritten each call)
+- `NNN.prompt.md` — each prompt as sent, filed under its call number by the script
+- `NNN.out` — raw engine output, stdout and stderr (`NNN.out.part` while the engine runs)
+- `NNN.out.result.md` — the engine's reply, extracted — **this is what you read**
+- `NNN.out.done` — the completion marker: status, exit code, real start/end times, paths
+- `NNN.out.taken` — you `touch` it once the reply is triaged and relayed
+- `session.txt` — the external session id, for `resume`
 
-Create the directory on first use. Never delete these — they are the audit trail when a finding
-turns out to be wrong.
+Plus the diff file you prepare for a reviewing role: `.claude/teams/{team-name}/engine/{role}-{n}.diff`.
+
+Never delete, overwrite or copy anything over these files — they are the audit trail when a finding
+turns out to be wrong, and on 2026-09-23 a proxy that copied a background task's output over a
+finished `out` file destroyed a 14-minute engine reply.
+
+## Step 0: Every Turn Starts on Disk
+
+Before you launch anything — on your first request and on every later one — check what your role
+already has:
+
+```bash
+{plugin}/scripts/run-engine.sh --status .claude/teams/{team-name} {your name}
+```
+
+- `DONE-UNREAD …` — a call finished and nobody relayed it: a turn that ended early, or a session that
+  restarted while the engine ran. **Read its `.out.result.md` and relay it now**, instead of
+  launching the same prompt again.
+- `RUNNING … pid=…` — your engine is still working. Start the wait on its `.done` marker (Step 1) and
+  launch nothing.
+- `DEAD …` — the worker is gone without a marker; that call is lost. Launch the next one.
+- nothing, or only `taken` lines — launch.
+
+**Never launch while your role has a `RUNNING` call or a `DONE-UNREAD` one.** A second engine on the
+same prompt costs the whole engine time again and races the first for `session.txt`.
 
 **The directory is keyed on your teammate name, not on the bare role** — for `second-reviewer` that
 is `engine/second-reviewer-{task id}/`. Two SENSITIVE tasks can be in review at the same time, and
@@ -80,7 +109,9 @@ session and review the wrong task. The ledger `"role"` field carries the same in
 If your spawn prompt carries no request yet (a reviewer or tech-lead spawned with "reply READY"):
 keep the context, reply READY, end your turn, and open the engine session on the first real request.
 
-Write `001.prompt.md` containing, in order:
+Write the prompt to `.claude/teams/{team-name}/engine/{your name}/draft.prompt.md` — the launcher
+files it under the call's own number (`001.prompt.md`, `002.prompt.md`, …), so you never pick a
+number and never overwrite an earlier prompt. It contains, in order:
 
 1. `Ты — {ROLE}. Ниже твоя роль целиком, следуй ей буквально.`
 2. The **full role brief** verbatim.
@@ -89,111 +120,145 @@ Write `001.prompt.md` containing, in order:
 5. The **Output Contract** below.
 
 **Never paste code, diffs or file contents into the prompt.** The engine runs inside the repository
-with read access: it opens `git diff`, reads files and greps by itself, far more cheaply than you
-relaying the same bytes through your context. Give it the file list, the commit range, the task and
-what to look for — then let it look.
+with read access: it reads files and greps by itself, far more cheaply than you relaying the same
+bytes through your context. Give it the file list, the commit range, the task and what to look for —
+then let it look.
 
 This is the single biggest way a proxy goes wrong. Measured on a real run: a reviewer proxy made 30
 engine calls but 190 shell commands of its own, because it kept investigating the code first in
 order to "send a complete package". It ended up doing the review itself and costing more than every
 coder in that run combined. Packaging is not your job; addressing is.
 
-**Write the file to disk before you launch anything** — everything below can hang, and the prompt
-file is what makes the run recoverable afterwards.
+**A reviewing role gets the diff as a file you wrote before the launch** (`unified-reviewer`,
+`second-reviewer`, any role asked to read a change). Write it without reading it — the output goes
+to the file, not into your context:
 
-For Grok, mint the session UUID (`uuidgen`) and write it to `session.txt` **now**, before the call —
-you are the one choosing it, so there is no reason to wait.
+```bash
+R=.claude/teams/{team-name}; D=$R/engine/{your name}-{n}.diff
+git diff {base} -- {files} > "$D"
+git ls-files --others --exclude-standard -- {files} | while IFS= read -r f; do
+  git diff --no-index -- /dev/null "$f" >> "$D"; done      # new untracked files; exit 1 is normal
+```
 
-Then run the engine's `cmd` with the placeholders filled as `engines.md` defines them ("Built-in
-Engine Presets" → Placeholders): `{prompt}` = `"$(cat <path>)"`, `{prompt_file}` = `<path>` for
-presets that read the file themselves (`cursor`), `{sandbox}` = `read-only` for every role except
-`coder` and `risk-tester` (those get `workspace-write`), and `{mode_flags}` = the preset's `mode` flags
-for that same access. Redirect output to
-`NNN.out.txt` inside the command itself (`> NNN.out.txt 2>&1`) so the result exists on disk even if
-you never see it.
+Then name it in the prompt: `Дифф задачи: <path>. git для него не запускай.` Never `git add -N` or
+anything else that writes to the index — coders share it. **Never `sudo`**, neither in your own
+command nor in the prompt: Cursor's read-only sandbox refuses it, and on 2026-09-23 an engine told to
+run `sudo -u admin git diff` got no diff, read the files as they stood and reported "no findings"
+after eight minutes. If git refuses the repository as `dubious ownership`, use
+`git -c safe.directory="$PWD" diff …`. If a request (from Lead or a coder) itself says `sudo`, drop
+the word and keep the command. For `second-reviewer` Lead has already written the file and its path
+is in your brief; write it yourself only if that file is missing or empty.
 
-- **`coder` and `risk-tester`: always `run_in_background: true`** — their runs routinely exceed
-  the 10-minute Bash ceiling, and a foreground call that hits it loses the report.
-  **Never add a trailing `&` to the command as well.** With both, the tool reports "completed" within
-  seconds while the real engine keeps running orphaned, and you announce a finished run that has not
-  produced anything yet (hit twice in one live run, 2026-09-17; recovered only by polling the pid).
-- Other roles: foreground with `timeout: 600000`. Stay in your turn until the out file is complete —
-  a reviewer proxy that ends its turn while the engine runs leaves the coder waiting on a verdict
-  that already exists on disk.
+**Write the file to disk before you launch anything** — the prompt file is what makes the run
+recoverable afterwards.
+
+For Grok, mint the session UUID (`uuidgen`) now and pass it to the script as `--session` — the
+script writes `session.txt` before the call; you are the one choosing it, so there is no reason to wait.
+
+### Launch — through `run-engine.sh`, never the CLI directly
+
+Fill the engine's `cmd` as `engines.md` defines it ("Built-in Engine Presets" → Placeholders, and
+"Launching an Engine" for the argv form): `'{prompt}'` / `'{prompt_file}'` are left for the script to
+substitute, `{sandbox}` = `read-only` for every role except `coder` and `risk-tester` (those get
+`workspace-write`), `{mode_flags}` = the preset's `mode` flags for that same access. Then, in an
+ordinary Bash call:
+
+```bash
+PATH="$HOME/.local/bin:$PATH" {plugin}/scripts/run-engine.sh --role {your name} \
+  --run-dir .claude/teams/{team-name} --prompt .claude/teams/{team-name}/engine/{your name}/draft.prompt.md \
+  --engine {engine} --task {id} [--report {file}.md] [--session {uuid}] --timeout {sec} \
+  -- {engine argv, e.g. cursor-agent -p --trust --output-format json --model {model} --mode ask -- '{prompt}'}
+```
+
+It returns within a second and prints `pid`, `out`, `done` and `result` paths — the engine runs
+detached, with its output, reply, session id, ledger lines and marker all written by the script.
+`--timeout` is the only ceiling: about 1800 for a reviewer, `second-reviewer` or architect, 3600 or
+more for `coder` and `risk-tester`. `--report` names the file under `reports/` that the role would
+have written, when the reply goes there verbatim (below).
+
+What is gone, and must not come back:
+
+- **No foreground call "with `timeout: 600000`".** Claude Code no longer ends such a call at the
+  timeout — it moves it to the background (five cases of five, 2026-09-22/23), so the "ceiling" did
+  not bound anything, and what followed was a wait on the wrong file.
+- **No `run_in_background` on the CLI itself and no trailing `&`.** The script detaches the engine;
+  a backgrounded CLI call gives you a task-output file that never holds the reply.
+- **No waiting on anything except `<out>.done`** — not the background task's output file, not `<out>`
+  itself, not a timer.
+
+### Wait — on the marker, in the background
+
+```bash
+until [ -f {out}.done ]; do sleep 5; done; cat {out}.done
+```
+
+Run it with `run_in_background: true`. Its completion notification resumes you (verified
+2026-09-18), so you can be idle while the engine works; teammates can reach you meanwhile and a
+message does not end the wait. Never end a turn with neither a wait running nor the reply relayed —
+then nothing would resume you.
+
+When the marker is there, read it: `status=done` → read `{out}.result.md`, triage, relay, `touch
+{out}.taken`, and append `{"ts":"<date -Is>","event":"relayed","role":"{your name}","task":"{id}"}` to
+the ledger. `status=failed` → the `reason` line says why (timeout, exit code, no reply).
 
 **A read-only engine cannot write files — you write them.** Where your role brief says the role
 writes a report (`reports/debate-r{N}-{name}.md`, `reports/review-task{id}-{role}-r{round}.md`), ask
-the engine for the full text in its reply, then save that text verbatim to the file the role would
-have written, and only then relay the short verdict. Do not pass the write instruction through: under
+the engine for the full text in its reply. Where that file holds the reply **verbatim** — a
+`second-reviewer` findings file, an architect's round file — pass `--report {that name}` and the
+script saves it the moment the call succeeds. Where it holds **your triaged version** — the
+`unified-reviewer` review file — do not pass `--report`; write the file yourself after triage. (The
+script never overwrites an existing report: a second copy gets a `-{label}` suffix.) Either way you
+relay the short verdict after the file exists. Do not pass the write instruction through: under
 `cursor --mode ask` the engine refuses and spends the turn discovering that.
 
 **Immediately after launching, tell Lead where to look.** Do not estimate how long it will take —
-report only checkable facts:
+report only checkable facts, copied from the script's output:
 
 ```
 ENGINE RUNNING: {role} on {engine}, started {HH:MM}
-  process: {pid if known}
-  output: .claude/teams/{team-name}/engine/{role}/{NNN}.out.txt
+  process: {pid}
+  output: .claude/teams/{team-name}/engine/{role}/{NNN}.out
+  done marker: .claude/teams/{team-name}/engine/{role}/{NNN}.out.done
 ```
 
-Then get the session id into `session.txt` — how depends on the engine, and there are three ways:
+### Session id and ledger — the script's job
 
-| Engine | Where the id comes from | When you can write it |
-|--------|-------------------------|-----------------------|
-| `grok` | you minted it (`uuidgen`) | already written, before the call |
-| `codex`, `kimi` | a line in the output (`session id: <uuid>` / `kimi -r session_…`) | as soon as it appears — do not wait for the run to finish |
-| `cursor` | the `session_id` field of the JSON reply | when the call returns: `--output-format json` prints one object at the end |
+`session.txt` is written by the script: from the `session_id` field of Cursor's JSON reply, from the
+`session id:` / `kimi -r session_…` line for Codex and Kimi, or from `--session` for Grok. Without it
+the next round has nothing to `resume`, and the role silently forgets every earlier round — so if the
+marker says `status=done` but `session=` is empty on an engine that should have printed one, treat
+it as a failed call.
 
-Without `session.txt` the next round has nothing to `resume`, and the role silently forgets every
-earlier round — which is most of the value of keeping one session per role. For Cursor, read the id
-from the JSON object rather than grepping free text; the out file also carries stderr (`2>&1`), so
-take the last line that parses:
-
-```bash
-python3 -c 'import json,sys
-for line in reversed(open(sys.argv[1]).read().splitlines()):
-    try: print(json.loads(line)["session_id"]); break
-    except (ValueError, KeyError, TypeError): pass' NNN.out.txt > session.txt
-```
-
-An empty `session.txt` after a zero exit means the reply was not JSON — treat it as a failed call.
-
-**As soon as you have the session id, append one line to the run ledger**
-`.claude/teams/{team-name}/ledger.jsonl` (append with `>>`, never rewrite the file):
-
-```json
-{"ts":"...","event":"launch","role":"{role}","engine":"{engine}","task":"{id}","session":"{session id}","out":"{path}"}
-```
-
-Then append a line at **every** milestone, not only at the end — these are what let Lead tell
-"working" from "dead" without asking you:
+The ledger `.claude/teams/{team-name}/ledger.jsonl` gets `launch` (with the pid, at once) and `done` /
+`failed` (with exit code, measured `wall_s` and session) from the script, stamped with `date -Is`.
+**Never write a time into the ledger by hand.** You append only what the script cannot know, one `>>`
+line each, `ts` from `date -Is`:
 
 | When | Line |
 |------|------|
-| The engine command returns | `{"event":"engine_done","role":"...","task":"...","session":"..."}` |
+| You relayed a reply | `{"event":"relayed","role":"...","task":"..."}` |
 | Self-checks finish (coder role) | `{"event":"checks_done","result":"pass\|fail: ..."}` |
 | The commit lands (coder role) | `{"event":"committed","commit":"<sha>"}` |
-| The whole run ends | `{"event":"done"}` or `{"event":"failed","reason":"..."}` |
 
-Each line is one `>>` append and costs almost nothing. Their absence is the signal: a ledger whose
-last line is `engine_done` from forty minutes ago says exactly what went wrong and where, without
-anyone having to interrogate you — which matters because by then you may not be answering. This is the
-only thing that must survive you — the engine records the conversation itself, but nothing else
-knows which of its sessions was yours. If you die before writing it, the map is rebuilt with
-`scripts/engine-sessions.py`; write the line anyway so nobody has to.
+Their absence is the signal: a ledger whose last line for your role is the script's `done` from forty
+minutes ago says exactly what went wrong and where, without anyone having to interrogate you — which
+matters because by then you may not be answering. If the ledger itself is lost, the map is rebuilt
+with `scripts/engine-sessions.py`.
 
-**If the call fails** — binary not found, auth error, non-zero exit, or no model reply in the output
-— send `ENGINE_DOWN: {role}. {one-line reason}` to Lead and stop. Do not retry more than once. Do
-not do the work yourself. Judge by the exit code and the presence of a reply, **not** by stderr
+**If the call fails** — binary not found (the script refuses to start and says so), auth error,
+`status=failed`, or no model reply — send `ENGINE_DOWN: {role}. {one-line reason}` to Lead and stop.
+Do not retry more than once, and retry only through the script (it takes the next label). Do not do
+the work yourself. Judge by the marker's `status` and the presence of a reply, **not** by stderr
 noise: Codex prints a `failed to load models cache` ERROR line on successful runs.
 
 ## Step 2: Later Messages — Resume, Never Restart
 
-For every subsequent message to your role, write a new numbered prompt containing ONLY the new
-request (the session already holds the role brief and context), and run the engine's `resume`
-command with the saved session id.
+For every subsequent message to your role, start with Step 0, then write `draft.prompt.md` containing
+ONLY the new request (the session already holds the role brief and context), and launch the engine's
+`resume` command with the saved session id — through `run-engine.sh` and waited on its marker,
+exactly as in Step 1.
 
-If `resume` fails, open a fresh session once — re-sending the role brief and context — and note in
+If `resume` fails (`status=failed`), open a fresh session once — re-sending the role brief and context — and note in
 your relay that the engine lost its memory of earlier rounds.
 
 ## Step 3: Triage — the part that matters
@@ -237,19 +302,23 @@ tool result → also send Lead `QUEUED: <name>` + the same text. A `RESEND:` you
 - **Reviewer** (`unified-reviewer`): approve only when
   CONFIRMED is empty. UNVERIFIED notes never block a task on their own.
 - **`second-reviewer`** (you are spawned as `second-reviewer-{task id}`): a second *opinion*, not a
-  second verdict. **File first, message second** — save what the engine returned, verbatim, to
-  `.claude/teams/{team-name}/reports/review-task{id}-second-r{round}.md` before you send anything;
-  your engine runs `read-only` and cannot write it, that file is the role's record, and Phase 3
-  counts those files to report how many tasks got a second opinion. Then relay findings and nothing
+  second verdict. **File first, message second** — the engine's reply, verbatim, goes to
+  `.claude/teams/{team-name}/reports/review-task{id}-second-r{round}.md` before you send anything:
+  launch with `--report review-task{id}-second-r{round}.md` and the script writes it the moment the
+  engine exits, so it is on disk even if you are not. Your engine runs `read-only` and cannot write
+  it, that file is the role's record, and Phase 3 counts those files to report how many tasks got a
+  second opinion. The diff file is in your brief, written by Lead; pass its path to the engine. Then relay findings and nothing
   else, each with its `file:line`, as
   `SECOND OPINION: task #N` to `unified-reviewer` — never to a coder, and never an approval or any
   other verdict-shaped line; that reviewer verifies what you send and merges it into the one verdict
   the coder gets. **No anchoring — you never read anything the first reviewer produced**: its
   report file for the task under review (`reports/review-task{id}-unified-*.md`) is off limits, and
   no part of its framing goes into your prompt — an engine handed someone else's conclusions
-  confirms them, and a second opinion that agrees by construction is worth nothing. Run the engine
-  **foreground with `timeout: 600000`, never `run_in_background`** — the tool call is what bounds an
-  engine hang for this role. Sandbox is `read-only`, not overridable. If the engine is down you report
+  confirms them, and a second opinion that agrees by construction is worth nothing. Launch through
+  `run-engine.sh` with `--timeout 1800` and wait on the `.done` marker like every other call — the
+  script's timeout is what bounds an engine hang for this role, not a foreground Bash call. The
+  reviewer is parked on your findings and gives no verdict until they come, so relay the moment the
+  marker appears. Sandbox is `read-only`, not overridable. If the engine is down you report
   `ENGINE_DOWN: second-reviewer-{task id}. {reason}` and stop as usual, but this role has **no
   successor** — nothing is respawned on Claude and no ROSTER UPDATE goes out; Lead tells
   `unified-reviewer` `SECOND REVIEWER: none` with `task #N` on the second line, since the reviewer may
@@ -285,6 +354,8 @@ tool result → also send Lead `QUEUED: <name>` + the same text. A `RESEND:` you
 - Прежде чем сообщить о проблеме, проверь, нет ли уже защиты (middleware, обёртка, валидация
   фреймворка) — теоретические проблемы без конкретного кода не сообщай.
 - Не хватает контекста — не выдумывай, заверши ответ строкой `ВОПРОС ОРКЕСТРАТОРУ: <вопрос>`.
+- Не запускай `sudo` и ничего, что требует прав выше песочницы: в режиме только-чтение он не
+  сработает. Дифф, если он нужен, уже лежит в файле — путь дан выше; git для него не запускай.
 ```
 
 If the reply ends with `ВОПРОС ОРКЕСТРАТОРУ:`, answer it yourself from your context block if you
@@ -297,16 +368,20 @@ as if it were the role's output.
 reading the result already fill that budget. If you are on your fourth command before the engine has
 answered, you are doing the role's work instead of routing it — stop and delegate.
 
-**Waiting is not in the budget.** Calls that only wait for your own engine process to exit (waiting on
-the background task, checking the pid) do not count, and "stop" never means ending your turn while
-the engine runs: nothing would resume you. End the turn only after the result is read and relayed.
+**Bookkeeping is not in the budget**: the Step 0 `--status` check, writing the diff file, the
+background wait on the `.done` marker and the `touch …taken` / `relayed` line. "Stop" never means
+leaving the engine unwatched: end a turn only with the marker wait running or the result relayed.
 
 Triage after the engine answers is exempt, but triage means opening the cited lines and nothing
 else. Reading a file the engine did not cite is investigation, not verification.
 
 Signals that you have drifted — all observed in a real run, treat any as a stop sign:
 
-- you ran `git diff` or `git log` to understand the change rather than to name a range for the engine
+- you ran `git diff` or `git log` to understand the change rather than to write the diff file for the engine
+- you ran code, an AST parse or a script to test a finding instead of reading the cited line (4.4
+  minutes on one task, 2026-09-23)
+- you launched the engine again while its previous call was `RUNNING` or `DONE-UNREAD`, or copied
+  anything over an `engine/` file
 - you searched the codebase before the engine had said anything
 - you judged a finding from your own reading rather than from the cited line
 - (coder role) you edited a file yourself
@@ -314,9 +389,12 @@ Signals that you have drifted — all observed in a real run, treat any as a sto
 ## Rules
 
 - Never relay an unverified finding as blocking.
-- While your engine runs in the background, stay in your turn until the process exits — nothing would
-  resume you if you ended it. Before ending a turn, make sure every request that reached you
-  has been fed to the engine and answered; one engine call per request, never silently skip one.
+- While your engine runs, keep the background wait on its `.done` marker running — that wait is what
+  resumes you; end a turn only with it running or with the reply relayed. Before ending a turn, make
+  sure every request that reached you has been fed to the engine and answered; one engine call per
+  request, never silently skip one.
+- Launch only through `scripts/run-engine.sh`, read only `<out>.result.md`, and never launch while
+  your role has a `RUNNING` or `DONE-UNREAD` call (Step 0).
 - Never modify code, in any role except `coder` — and even there, the engine writes, you verify.
 - Never message Lead about routine work; Lead only hears `ENGINE RUNNING`, `ENGINE_DOWN`, and whatever
   the role's own brief already sends (a coder's IN_REVIEW / QUESTION / STUCK / DONE, DECISION

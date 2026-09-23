@@ -649,7 +649,7 @@ After plan validation (Tech Lead for MEDIUM, Architect debate for COMPLEX), run 
    Spawn risk testers for all CRITICAL risks and up to 3 MAJOR risks. Skip MINOR risks.
    Launch them **in parallel** — each investigates independently.
 
-   **If `risk-tester` is on an external engine** (Step 0b table): no `Task()` — write this exact prompt to `.claude/teams/{team}/engine/risk-tester-{n}.prompt.md`, append the Output Contract from `engines.md`, and run the CLI with the **write** sandbox in background (risk testers create throwaway scripts — tell the engine to keep them in `.claude/teams/{team}/tmp/`). Read the report as you would the agent's return value. A report without the script and its actual output is not a verdict — resume the session and ask for the evidence.
+   **If `risk-tester` is on an external engine** (Step 0b table): no `Task()` — write this exact prompt to `.claude/teams/{team}/engine/risk-tester-{n}/draft.prompt.md`, append the Output Contract from `engines.md`, and launch it through `scripts/run-engine.sh` with the **write** sandbox, `--timeout 3600` and `--report risk-{n}.md` (risk testers create throwaway scripts — tell the engine to keep them in `.claude/teams/{team}/tmp/`). Wait on its `.done` marker in the background (`engines.md`, "Launching an Engine") and read the report from `<out>.result.md` as you would the agent's return value. A report without the script and its actual output is not a verdict — resume the session and ask for the evidence.
 
 2b. 📢 **Print each verdict** as risk tester results come back — what was found and what it changes:
 
@@ -687,6 +687,7 @@ Spawn everyone NOW — the reviewer (on COMPLEX after the architects hand over a
 ```
 ROLE: {role id}
 ENGINE: {engine name}, cmd/resume/session pattern: {from engines.md presets, with user overrides applied}
+LAUNCHER: {launcher path from ## Engines in state.md} — every engine call goes through it (engines.md, "Launching an Engine")
 SANDBOX: read-only   (coder: workspace-write + explicit allowed-file list)
 
 --- ROLE BRIEF (follow literally) ---
@@ -935,6 +936,7 @@ Coders still run in Phase 3 (conventions, fixes, cleanup): keep delivering QUEUE
 {Omit this whole section if no config file exists — the default is Claude everywhere.}
 - {role}: {engine} {(fallback applied: <reason>) if it fell back}
 - fallback policy: {claude | fail}
+- launcher: {absolute path of scripts/run-engine.sh}
 
 ## Team Roster
 - unified-reviewer: {ACTIVE} (spawned before the coders; on COMPLEX at Step 5a-3, after the architects handed over)

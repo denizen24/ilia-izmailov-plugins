@@ -114,7 +114,7 @@ Bash: curl -s -o /dev/null -w '%{http_code}' --connect-timeout 3 {base_url}
 
 Only spawn agents for sections with items. Launch ALL in parallel.
 
-**Engine check** (Step 0b table): `ci-verifier` and `spec-verifier` on an external engine are not spawned as Claude agents — write the same prompt to a file and run the CLI in background (read-only sandbox for `spec-verifier`; `ci-verifier` needs the **write** sandbox because builds and tests write artifacts). `browser-verifier` is always Claude. A verifier report is only usable if it quotes actual command output — an external engine claiming "tests pass" without the output counts as BROKEN, not PASS.
+**Engine check** (Step 0b table): `ci-verifier` and `spec-verifier` on an external engine are not spawned as Claude agents — write the same prompt to a file and launch it through `scripts/run-engine.sh` with `--report verify-{role}.md`, waiting on its `.done` marker (`engines.md`, "Launching an Engine") (read-only sandbox for `spec-verifier`; `ci-verifier` needs the **write** sandbox because builds and tests write artifacts). `browser-verifier` is always Claude. A verifier report is only usable if it quotes actual command output — an external engine claiming "tests pass" without the output counts as BROKEN, not PASS.
 
 ```
 Task(subagent_type="agent-teams:ci-verifier",
@@ -239,7 +239,7 @@ Coders appended entries here during Step 4.5 of their workflow. Parse all `## [t
 
 ### 6b. Run a safety scan for legacy coders missed
 
-Dispatch a single Explore subagent to catch what coders might have missed. Give it the list of files touched this session (from commits or state.md). This is the `legacy-scanner` role — if it is assigned to an external engine (Step 0b table), run the CLI read-only with this same prompt instead of spawning Explore:
+Dispatch a single Explore subagent to catch what coders might have missed. Give it the list of files touched this session (from commits or state.md). This is the `legacy-scanner` role — if it is assigned to an external engine (Step 0b table), launch it read-only through `scripts/run-engine.sh` with this same prompt instead of spawning Explore:
 
 ```
 Task(
@@ -385,7 +385,9 @@ in the Step 0b table, or no task marked SENSITIVE, and the line is omitted entir
 Take the numbers off disk — Lead never read the review reports, and a compaction may have taken the
 rest of the run with it:
 
-- **Tasks covered:** `ls .claude/teams/{team-name}/reports/review-task*-second-r*.md | wc -l`
+- **Tasks covered:** `ls .claude/teams/{team-name}/reports/ | grep -oE '^review-task[^-]+-second-r' | sort -u | wc -l`
+  — distinct tasks, since a relaunch leaves a `-{label}` copy beside the first file rather than
+  overwriting it
 - **Findings confirmed:** `grep -h '\[second:' .claude/teams/{team-name}/reports/review-task*-unified-r*.md | wc -l`
 - **Findings offered:** confirmed plus the lines under the `### Not confirmed (second opinion)`
   headings in the same files. Those lines carry no severity token on purpose — they count here and

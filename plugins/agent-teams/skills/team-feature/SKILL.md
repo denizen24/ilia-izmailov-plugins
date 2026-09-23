@@ -86,7 +86,8 @@ never a second verdict — the coder still hears one verdict, from `unified-revi
 - **No config file → nothing changes.** This is the stock path and must stay zero-cost: Step 0b exits
   after one Read that finds nothing.
 - **One-shot roles** on an external engine are not spawned as Claude agents at all — the spawner
-  runs the CLI via Bash and reads the report.
+  launches the CLI through `scripts/run-engine.sh`, waits on its `.done` marker and reads the reply
+  from disk (`engines.md`, "Launching an Engine").
 - **Teammate roles** on an external engine are spawned as `agent-teams:proxy-teammate` under the
   same name. The team shape is unchanged: coders still address `unified-reviewer` and get a normal
   review back; the proxy delegates the thinking and triages the result before relaying it.
@@ -272,7 +273,7 @@ Per-run artifacts live in `.claude/teams/{team-name}/`:
 |-----------|-----------------|-----------|
 | `reports/` | Review findings, architect debate rounds, researcher / risk / verifier reports | Reviewers, architects, Lead |
 | `engine/` | Prompts, session ids and raw output of external CLI runs | Proxy teammates, Lead |
-| `ledger.jsonl` | One line per external engine run: role, task, session id, outcome. **The address of the engine's own recording** — Codex, Kimi, Grok and Cursor each keep the full conversation themselves, so this is what makes theirs findable and resumable. Rebuildable with `scripts/engine-sessions.py` | Whoever launches the run |
+| `ledger.jsonl` | One line per external engine run: role, task, session id, outcome. **The address of the engine's own recording** — Codex, Kimi, Grok and Cursor each keep the full conversation themselves, so this is what makes theirs findable and resumable. Rebuildable with `scripts/engine-sessions.py` | `scripts/run-engine.sh` (`launch`, `done`/`failed`); the caller adds `relayed`, `checks_done`, `committed` |
 | root | `PLAN.md` (the task list — Lead only), `state.md`, `pending.log` (copies flagged `QUEUED`), `DECISIONS.md`, `VERIFICATION_PLAN.md`, `VERIFICATION_REPORT.md`, `LEGACY_REPORT.md` | Lead, Tech Lead / Primary Architect |
 
 Rules:

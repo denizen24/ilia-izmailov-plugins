@@ -163,6 +163,7 @@ Copy them byte for byte — every other file in this skill quotes this table rat
 |---|---|---|
 | `SECOND REVIEWER AVAILABLE: <engine>` | Lead → you, in your **spawn prompt** | A second reviewer exists for this run, in general. No such line = this section is inert. |
 | `SENSITIVE: task #N — <why>. Files: <list>.` | you → `main` | Your first action on a sensitive task, and only with the line above. |
+| `PARKED: task #N — waiting for SECOND REVIEWER` / `… waiting for SECOND OPINION` | you → Lead, as the **last line of every turn** you end while parked | What you are waiting for on which task. Lead reads it in your completion notification and re-sends a missing answer. |
 | `SECOND REVIEWER: <engine>\ntask #N` | Lead → you | Lead spawned one for task #N; its findings are coming. |
 | `SECOND REVIEWER: none\ntask #N` | Lead → you | No second opinion for task #N. Proceed alone on it. |
 | `SECOND OPINION: task #N` | `second-reviewer-{N}` → you | Findings only, each with `file:line`. Never a verdict, never to a coder. |
@@ -180,18 +181,26 @@ several tasks at once, so the second line is what tells you which one the answer
    `SENSITIVE: task #N — <why>. Files: <list>.` — `SendMessage(to="main")`, with the same `<why>` you
    would write in `### Depth: SENSITIVE ({what makes it sensitive})`. On later rounds, skip to your
    own pass.
-2. **End your turn.** Lead answers at once and the answer resumes you. Staying in your turn to wait is
-   what puts that answer in the `queued` state, where it is lost.
-   **If your own `SENSITIVE:` send came back `queued`, do not park on it.** The ordinary remedy — hand
-   Lead a copy — is empty here, because Lead was the recipient. Review the task alone and send that
-   coder its verdict, exactly as on `SECOND REVIEWER: none`. You lose one optional opinion on one task;
-   parking on a message that may never have arrived costs that coder the whole run. A `SECOND REVIEWER:`
-   for that task arriving later is a nudge, not a resume signal — handle it as an answer naming a task
-   you are not parked on, below.
+2. **End your turn, parked.** Lead answers in the same turn it reads your message, and the answer
+   resumes you. Staying in your turn to wait is what puts that answer in the `queued` state, where it
+   is lost. End it with the line `PARKED: task #N — waiting for SECOND REVIEWER`.
+   **From here on you give no verdict on that task until a `SECOND REVIEWER:` answer naming it has
+   reached you.** Not after a while, not because nothing came: Lead owes you that answer and re-sends
+   it whenever your turn ends without it.
+   **If your own `SENSITIVE:` send came back `queued`, that is not a `none` — keep waiting.** Lead was
+   the recipient, so there is no copy to hand over; instead end your turn with the `SENSITIVE:` line
+   itself, verbatim, followed by the `PARKED:` line. Your final text reaches Lead in its completion
+   notification whatever happened to the message, and Lead answers from there. (On 2026-09-22 a
+   reviewer treated its `queued` SENSITIVE as "no second opinion", approved alone, and a MAJOR the
+   second engine found fourteen minutes later never reached the coder.)
 3. On `SECOND REVIEWER: none` for that task — review it alone and send the coder your digest, as always.
 4. On `SECOND REVIEWER: <engine>` for that task — do your own full pass anyway and write your report
-   file, then wait for `SECOND OPINION: task #N` before you send the coder anything. **End your turn
-   to wait**: the findings resume you, and Lead can only reach a reviewer that is idle.
+   file, then wait for `SECOND OPINION: task #N` — or for Lead's explicit release,
+   `SECOND REVIEWER: none` naming that task — before you send the coder anything. **End your turn to
+   wait**, with `PARKED: task #N — waiting for SECOND OPINION`: the findings resume you, and Lead can
+   only reach a reviewer that is idle. A second opinion on an external engine can take a quarter of an
+   hour; that is the wait this park exists for, and it is bounded on Lead's side (the engine's
+   timeout, then the release), never by you giving up.
 
 Your own pass is the same on both paths. A second opinion is added to your findings; it never replaces
 them and never shortens the work.
@@ -249,6 +258,11 @@ It happens once, on the first review round. Rounds 2+ you verify the fixes alone
 those rounds says so in one line — `Second opinion: round 1 only, see review-task{id}-second-r1.md.` —
 because a reader comparing the `-r1` and `-r2` reports otherwise concludes the second opinion failed.
 
+**Late means after you sent the verdict — nothing else.** Findings that reach you before you have
+sent that task's verdict are folded in exactly as above, whatever else happened first: a
+`SECOND REVIEWER: none` whose verdict you have not sent yet, a `ROTATION` you have not finished, a
+`RESEND:`. None of them makes a finding already in front of you "late".
+
 A `SECOND OPINION` for a task whose verdict you already sent **never reopens it**. Append it verbatim to
 that task's report file under a `### Received late (second opinion)` heading, again with no severity and
 no `[second:…]` tag, and send the coder nothing. That heading is for the record only: Phase 3 counts
@@ -264,7 +278,9 @@ none of it ends the wait:
   still parked on yours.
 - **`SECOND OPINION: task #M` for a different task** — not your resume signal. It releases task #M's
   verdict, not this one's.
-- **`STATUS?` from Lead** — answer that you are parked on task #N waiting for `SECOND OPINION`.
+- **`STATUS?` from Lead** — answer with your `PARKED:` line(s): which task, waiting for which string.
+- **Every turn you end while parked** ends with one `PARKED:` line per parked task — the same line
+  whatever woke you. It is how Lead sees a park whose answer never arrived.
 - **`SECOND REVIEWER: none` whose second line names a task you are parked on** — Lead cancelled that
   one. Stop waiting on it and send that coder your verdict alone; a `SECOND OPINION` that still turns
   up afterwards is a late one. Another task's park is untouched.

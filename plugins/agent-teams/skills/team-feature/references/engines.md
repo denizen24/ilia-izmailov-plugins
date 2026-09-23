@@ -124,6 +124,8 @@ presets that interpolate the file on their own (`cursor`); `{sandbox}` = `read-o
 `workspace-write` by the role's need (`coder`, `risk-tester` write, everything else reads);
 `{mode_flags}` = the `mode` line of the preset for that same need; `{model}`, `{effort}` = the role
 override or the preset default; `{session}` = the saved session id.
+The templates below are written as shell strings; `scripts/run-engine.sh` takes the same command as
+argv with `'{prompt}'` left for it to fill — the translation is in "Launching an Engine" below.
 **Re-verify after CLI upgrades** — model names and resume flags do change.
 
 **Judging success:** use the process exit code and whether a model reply is present. Do NOT treat
@@ -204,8 +206,8 @@ For write-capable roles (`risk-tester`) use `--sandbox enabled -f`.
 
 **Sessions:** Cursor prints the id itself, in the `session_id` field of the JSON reply — read it
 from there rather than minting your own (unlike Grok). `--output-format json` prints one object when
-the run ends, so the id is known only when the call returns — write `session.txt` and the ledger
-`launch` line right then. Verified: a second call with `--resume` recalled a word from the first
+the run ends, so the id is known only when the call returns — `scripts/run-engine.sh` extracts it
+into `session.txt` and the ledger `done` line at that moment. Verified: a second call with `--resume` recalled a word from the first
 (354 input tokens against 17 536 from cache; re-verified 2026-09-17 against 2026.09.10).
 
 **Prompt through a file.** Role briefs contain quotes, backticks and newlines; passing them inline
@@ -233,6 +235,13 @@ adversarial reading (security review, "what if"), `gpt-5.3-codex-xhigh` where th
 and run a script (risk-tester, verifiers), `gpt-5.6-sol-xhigh` for long diffs, `gemini-3.7-flash-high`
 for cheap wide tree-walking (codebase-researcher).
 
+**Grok on the critical path: take `grok-4.7-xhigh-fast`.** For `second-reviewer` and an architect
+on Cursor — roles the team waits on — `grok-4.7-xhigh-fast` is the recommended model. Measured on
+2026-09-23: a short task took 10.4 s against 16 s on plain `grok-4.7-xhigh`, with the same answer;
+on real reviews plain xhigh spent 7–16 minutes a call, because it writes 50–60 thousand reasoning
+tokens for a reply of a few thousand characters. Background critics that nobody waits on can keep
+plain xhigh.
+
 ---
 
 ## Step 0b: Resolve Engines (Lead, once per run)
@@ -250,7 +259,12 @@ Run this before Phase 1 Step 1. It is cheap and must not be skipped when the con
    both `"claude"` and `"fail"`**: a missing binary resolves it to `none` — it is skipped, never
    substituted, never fatal. A missing optional CLI must not stop a run.
 4. **Build the engine table** — role ID → engine — and keep it for the whole run. Write it into
-   `.claude/teams/{team-name}/state.md` under `## Engines` so it survives compaction.
+   `.claude/teams/{team-name}/state.md` under `## Engines` so it survives compaction, together with
+   one line `- launcher: {absolute path of scripts/run-engine.sh}` — the plugin root is two levels
+   above this skill's base directory (`{skill dir}/../../scripts/run-engine.sh`); if that is not at
+   hand, `ls ~/.claude/plugins/cache/*/agent-teams/*/scripts/run-engine.sh | sort -V | tail -1`.
+   `{plugin}/scripts/run-engine.sh` everywhere below means that path, and every proxy gets it in its
+   spawn prompt (`LAUNCHER:` line, `phase1-planning.md` Step 5).
    Role IDs that are not in the Role Registry belong to other plugins sharing this file
    (`team-research`, `zero-downtime-deploy`) — leave them out of the table and the 📢 line.
 
@@ -276,12 +290,104 @@ Run this before Phase 1 Step 1. It is cheap and must not be skipped when the con
 
 ---
 
+## Launching an Engine: `scripts/run-engine.sh` — the only way
+
+Every external engine call — Lead's one-shot (Mechanic A) and every proxy call (Mechanic B) — goes
+through `{plugin}/scripts/run-engine.sh`. Never call a CLI directly from Bash, in the foreground or
+the background.
+
+**Why a script, measured on 2026-09-23.** A foreground call "with `timeout: 600000`" does not bound
+anything any more: Claude Code moves the command to the background by itself when the timeout runs
+out (five cases out of five in two runs, at 120 s by default or at 600 s). In one task a proxy then
+waited on the background task's output file — which only ever held `EXIT:0` — instead of the engine's
+out file, copied that file over the finished engine reply, and relaunched the same prompt: about 24
+minutes lost directly, and the reply of the first call, which lived only in the proxy's context, was
+gone when the session restarted. Ledger times were typed in by hand and did not match the engine's.
+The script removes each of those steps from the caller's hands.
+
+**What it does.** It detaches itself from the caller (`setsid nohup`) and returns within a second,
+printing the worker `pid`, the `out` path and the `done` marker path. The worker then:
+
+- runs the command with stdin from `/dev/null` under `timeout --timeout` (default 3600 s), writing
+  stdout+stderr to `<out>.part` and renaming it to `<out>` atomically when the engine exits;
+- extracts the session id (`session_id` from the JSON reply for `cursor`; the preset's pattern for
+  `codex` / `kimi`; `--session` for Grok, which you mint) into `session.txt`, and the reply — the
+  JSON `result` field, or the whole output for engines that print plain text — into
+  `<out>.result.md`;
+- copies the reply to `reports/<name>` when `--report <name>` is given and the call succeeded;
+- appends `launch` (at once, with the pid) and `done` / `failed` (with exit code, `wall_s`, session,
+  paths) to `ledger.jsonl`, stamped with the real `date -Is`;
+- writes `<out>.done` **last** — `status`, `exit`, `reason`, `started`, `ended`, `wall_s`, `session`
+  and the paths. Its presence means everything above is already on disk.
+
+It **never overwrites**: a label that already has an `out` (or a running `.part`) is skipped for the
+next number (`001` → `002`) or the next suffix (`r1` → `r1-2`), and a report name that exists gets a
+`-<label>` suffix. The prompt is copied next to its output as `<label>.prompt.md` if it lived
+elsewhere. Files for one role live in `<run>/engine/<role>/`: `NNN.prompt.md`, `NNN.out`,
+`NNN.out.pid`, `NNN.out.result.md`, `NNN.out.done`, `session.txt`, and `NNN.out.taken`, which the
+caller writes (below).
+
+**The engine command is argv after `--`, not a string** — no `eval`, no nested quoting. Write
+`'{prompt}'` where the preset has `"{prompt}"` or `"$(cat {prompt_file})"`: the worker substitutes
+the prompt file's text itself (and `{prompt_file}` with its path). Drop `< /dev/null` — the worker
+already gives the engine no stdin. One argument is capped by the kernel at 128 KiB; a larger prompt
+fails with exit 126, reported as `failed`.
+
+```bash
+S={plugin}/scripts/run-engine.sh; R=.claude/teams/{team}
+# cursor, read-only role
+PATH="$HOME/.local/bin:$PATH" $S --role {role} --run-dir $R --prompt $R/engine/{role}/draft.prompt.md \
+  --engine cursor --task {id} [--report {file}.md] --timeout 1800 \
+  -- cursor-agent -p --trust --output-format json --model {model} --mode ask [--resume {session}] -- '{prompt}'
+# codex
+$S ... --engine codex -- codex exec --skip-git-repo-check --sandbox {sandbox} -m {model} \
+  -c model_reasoning_effort="{effort}" '{prompt}'          # resume: -- codex exec resume {session} '{prompt}'
+# kimi
+$S ... --engine kimi -- kimi -m {model} -p '{prompt}'      # resume: -- kimi -r {session} -p '{prompt}'
+# grok: mint the id first, pass it both ways
+$S ... --engine grok --session {uuid} -- grok --sandbox {sandbox} --always-approve -m {model} \
+  --effort {effort} --session-id {uuid} -p '{prompt}'
+```
+
+A user override of a preset's `cmd` / `resume` template translates the same way. Give `--timeout` by
+role: about 1800 for reviewers, `second-reviewer` and architects, 3600 or more for `coder` and
+`risk-tester`. The timeout is the real ceiling now — the Bash tool's is not.
+
+**Waiting is a separate call, on the marker only:**
+
+```bash
+until [ -f <out>.done ]; do sleep 5; done; cat <out>.done
+```
+
+Run it with `run_in_background: true`; its completion notification resumes you (verified
+2026-09-18: a background `until` wakes a teammate with nobody else involved). Wait on nothing else —
+not on the background task's own output file, not on `<out>` (it appears a moment before the
+result is extracted), not on a timer.
+
+**Read the reply from `<out>.result.md`**, and the outcome from the marker: `status=failed` with a
+`reason` (`timeout …`, `exit N`, `no reply in output`, `engine reported is_error`, `no JSON reply`)
+is a failed call. **Never copy anything over an `engine/` file** — every one of them is written once
+and read many times. After you have read and relayed a reply, `touch <out>.taken`.
+
+**Before any launch, check what is already there:**
+
+```bash
+{plugin}/scripts/run-engine.sh --status .claude/teams/{team} {role}
+```
+
+It prints one line per call: `RUNNING … pid=…` (process alive), `DONE-UNREAD …` (marker present,
+no `.taken`), `taken …`, or `DEAD …` (no marker, process gone). **Never launch while the role has a
+`RUNNING` or a `DONE-UNREAD` call** — wait on the running one, or read the unread one first. This is
+what survives a session restart: the reply of a call made before the restart is on disk, with its
+marker, and the next turn picks it up instead of paying for the same prompt again.
+
 ## Mechanic A: Delegated One-Shot
 
 Replaces a `Task()` spawn for one-shot roles. The spawner (usually Lead) does this instead:
 
 1. **Write the prompt to a file BEFORE launching** — never inline a long prompt in the shell
-   command; quoting breaks. Path: `.claude/teams/{team-name}/engine/{role}-{n}.prompt.md`.
+   command; quoting breaks. Path: `.claude/teams/{team-name}/engine/{role}/draft.prompt.md` — the
+   launcher files it as `001.prompt.md` (or the next free number) next to the call's output.
    Content: the exact same prompt the Claude agent would have received, plus the Output Contract
    below. Writing it first is not bookkeeping — it is the only thing that survives a hang.
 
@@ -291,21 +397,20 @@ Replaces a `Task()` spawn for one-shot roles. The spawner (usually Lead) does th
    The one exception is the gold standard block for a coder — those snippets may live outside the
    repository (in `.conventions/`), so name the path when there is one and inline only when there is
    not.
-2. **Run the CLI** via Bash, redirecting output to a file so it exists even if the caller loses it:
-   `... > .claude/teams/{team}/engine/{role}-{n}.out.md 2>&1`.
-   Fill the placeholders as described under "Built-in Engine Presets" — `{prompt}` / `{prompt_file}`
-   from the prompt file, `{sandbox}` / `{mode_flags}` from the role's need (`risk-tester` → write,
-   everything else → read).
 
-   **Always `run_in_background: true` for `coder` and `risk-tester`** — they routinely run longer
-   than the 10-minute Bash ceiling, and a foreground call that hits the ceiling loses the result
-   even though the engine finished its work. Other one-shot roles may run foreground with
-   `timeout: 600000`.
-3. **Append a ledger line** as soon as the session id appears — see "The Ledger" below. Two lines
-   per run (`launch`, then `done`/`failed`), appended with `>>`.
-4. **Read the report** from the output file, not from the terminal buffer. Treat it exactly as the
-   Claude agent's return value.
-5. **On failure** (non-zero exit, empty output, auth error, CLI missing) → apply `fallback`:
+   **A role that reads a change gets the diff as a file, prepared by you** — see "The diff goes in a
+   file" below. Never tell the engine to run `git` with `sudo` or with any other elevation.
+2. **Launch it with `scripts/run-engine.sh`** (section above) — fill the placeholders as described
+   under "Built-in Engine Presets": `{prompt}` / `{prompt_file}` are substituted by the script,
+   `{sandbox}` / `{mode_flags}` come from the role's need (`risk-tester` → write, everything else →
+   read). Pass `--report research-{role}.md` / `risk-{n}.md` / `verify-{role}.md` — the names
+   `phase1-planning.md` "Save every report you receive" gives — so the reply is on disk under
+   `reports/` without a step of yours.
+3. **Wait on the `.done` marker** with the background `until` above. The ledger lines are written by
+   the script; you add nothing.
+4. **Read the report** from `<out>.result.md`, never from the terminal buffer, then `touch
+   <out>.taken`. Treat it exactly as the Claude agent's return value.
+5. **On failure** (`status=failed` in the marker, auth error, CLI missing) → apply `fallback`:
    `claude` = spawn the normal Claude agent for this role and print
    `⚙️ {engine} не ответил на {role} — переключаю на Claude.`; `fail` = stop and report.
 
@@ -321,10 +426,13 @@ Replaces a `Task()` spawn for one-shot roles. The spawner (usually Lead) does th
 - Прежде чем сообщить о проблеме, проверь, нет ли уже защиты (middleware, обёртка, валидация
   фреймворка) — теоретические проблемы без конкретного кода не сообщай.
 - Не хватает контекста — не выдумывай, заверши ответ строкой `ВОПРОС ОРКЕСТРАТОРУ: <вопрос>`.
+- Не запускай `sudo` и ничего, что требует прав выше песочницы: в режиме только-чтение он не
+  сработает. Дифф, если он нужен, уже лежит в файле — путь дан выше; git для него не запускай.
 ```
 
 If the report ends with `ВОПРОС ОРКЕСТРАТОРУ:`, answer it from Lead's context and resume the
-session with the engine's `resume` command rather than starting over.
+session with the engine's `resume` command (through `run-engine.sh`, next label) rather than
+starting over.
 
 ---
 
@@ -349,6 +457,11 @@ The proxy's contract is defined in `agents/proxy-teammate.md`. Two rules matter 
   later message, so round 2 of a review remembers round 1.
 - **Triage before relay** — external engines over-report. The proxy verifies each finding against
   the cited lines and relays only what it can confirm. Details in the agent file.
+
+Every call the proxy makes goes through `scripts/run-engine.sh` and is awaited on its `.done`
+marker, exactly as in "Launching an Engine" above — including `resume` rounds. The proxy's answer
+lives on disk from the moment the engine exits, so a proxy that dies, or a session that restarts,
+loses nothing but the relay.
 
 ### When the proxy cannot start
 
@@ -409,6 +522,33 @@ are absent:
 one-shot agent would have received (the prompt printed in the phase document), plus the Output
 Contract.
 
+### The diff goes in a file, prepared by whoever launches the engine
+
+Any role that reads a change — `unified-reviewer`, `second-reviewer`, a verifier — gets the diff as a
+**file**, written before the launch by the one who launches the engine (Lead for a one-shot, the proxy
+for a teammate), and the prompt names its path. The engine is never asked to produce the diff itself.
+
+Measured on 2026-09-23: Lead's brief said `sudo -u admin git …`, the proxy carried it into the
+prompt, and Cursor's read-only sandbox (`--mode ask`) does not let `sudo` run. The engine got no diff,
+read the files as they stood, and returned "no findings" after 483 s; the rerun with the diff found
+the real ones. Eight minutes lost to one word of a prompt.
+
+```bash
+R=.claude/teams/{team}; D=$R/engine/{role}-{n}.diff
+git diff {base} -- {files} > "$D"
+# new files that are not tracked yet: diff them against /dev/null — this reads, it never touches the index
+git ls-files --others --exclude-standard -- {files} | while IFS= read -r f; do
+  git diff --no-index -- /dev/null "$f" >> "$D"; done
+```
+
+`git diff --no-index` exits 1 when the files differ — that is its success. Do not use `git add -N`
+or anything else that writes to the index: parallel coders share it. If git refuses the repository
+as `dubious ownership`, add `-c safe.directory="$PWD"` to the `git` call — never `sudo`. You write
+the file, you do not read it; the path goes into the prompt as `Дифф задачи: <path>`.
+
+In every prompt to an engine: no `sudo`, and nothing else that needs more rights than its sandbox —
+the Output Contract carries that line.
+
 ### `second-reviewer` — a brief with no agent file behind it
 
 There is no `agents/second-reviewer.md` and none is planned. The brief is **composed**, the same way
@@ -464,8 +604,10 @@ source code exactly as it says; the only file you write is the findings file nam
 - **Do not open `.claude/teams/*/reports/` — ever, for any task.** `unified-reviewer` has already
   written its own review of this task there, and reading it is what this instance exists not to do:
   an opinion that has seen the first one agrees with it, and the run then credits you for a
-  conclusion that was never yours. Read the changed files and the diff range, nothing else under
-  `.claude/`. If you have already opened one, say so in your findings instead of hiding it.
+  conclusion that was never yours. Read the changed files and the diff file named in your task
+  (it lives under `.claude/teams/{team-name}/engine/`), nothing else under `.claude/`. Do not run
+  `git` to rebuild the diff, and never `sudo`. If you have already opened a report, say so in your
+  findings instead of hiding it.
 - Then you are done — this instance lives for one task.
 ```
 
@@ -473,8 +615,8 @@ On an external engine the write line is translated like every other one: the eng
 findings in its reply and the proxy saves them to that path, because a `read-only` engine cannot
 write it (`agents/proxy-teammate.md`).
 
-**The brief is also defined by what it leaves out.** It carries the task, the list of changed files
-and the diff range, and **nothing `unified-reviewer` produced**: no findings, no severities, no report
+**The brief is also defined by what it leaves out.** It carries the task, the list of changed files,
+the diff range and the path of the diff file, and **nothing `unified-reviewer` produced**: no findings, no severities, no report
 file, no hint of what the first reviewer already suspects. Reading the reports directory is forbidden,
 and **the contract block above says so in its own words — that bullet is not optional and is not a
 summary of this paragraph, it is the only place the instruction actually reaches the reader.** A
@@ -494,14 +636,23 @@ sends the message without writing the file is invisible in the summary.
 | external | `Task(subagent_type="agent-teams:proxy-teammate", name="second-reviewer-{task id}", ...)` per Mechanic B, with the composed brief as its role brief. The proxy writes the findings file — a read-only engine cannot (`agents/proxy-teammate.md`). |
 | `claude` | `Task(subagent_type="agent-teams:unified-reviewer", name="second-reviewer-{task id}", ...)` — the agent file the composition starts from — with the findings-only contract at the top of the prompt, stating that it overrides that file's verdict and messaging sections **and the four lines named above**. That spawn loads the file whole, frontmatter included; nothing translates for this instance and nothing stands between it and a coder, so the override has to be explicit. There is no `agent-teams:second-reviewer` subagent type. |
 
-**The ten-minute ceiling belongs to the proxy, not to this role.** On an external engine the proxy
-runs its CLI in the foreground with `timeout: 600000`, so the call returns inside ten minutes whatever
-the engine does (`agents/proxy-teammate.md`). On `claude` there is no proxy and no such ceiling: **the
-bound is the subagent's own turn, and nothing states another one** — a Claude subagent carries no
-timer this plugin can set. When that turn ends the parked reviewer is released either way — by
-`SECOND OPINION: task #N` if findings came, otherwise at Lead's next end-of-turn idle check, which
-finds the task still `IN_REVIEW` with a line in `## Second opinions` and cancels the second opinion
-("When a Second Opinion Does Not Come", `phase2-monitoring.md`). Until it ends, that check cannot fire
+**The diff file for this role is Lead's.** Lead writes it at the spawn, as
+`.claude/teams/{team-name}/engine/second-reviewer-{task id}-1.diff`, with the commands in "The diff
+goes in a file" above, and puts its path in the brief — on both engines, since a `claude` instance
+spawned from `unified-reviewer` has no Bash at all. Writing it costs Lead one Bash call and no
+reading. A proxy that finds the file missing or empty writes it itself from the range in the brief.
+
+**The ceiling is the script's `--timeout`, not the Bash tool.** On an external engine the proxy
+launches through `scripts/run-engine.sh` with `--timeout 1800` and waits on the `.done` marker: the
+engine cannot outlive that, and its reply is on disk the moment it exits, whatever happens to the
+proxy (`agents/proxy-teammate.md`). The old rule — "foreground with `timeout: 600000` bounds the call"
+— no longer holds: Claude Code moves such a call to the background when the timeout runs out instead
+of ending it. On `claude` there is no proxy and no such ceiling: **the bound is the subagent's own
+turn, and nothing states another one** — a Claude subagent carries no timer this plugin can set. When
+that turn ends the parked reviewer is released either way — by `SECOND OPINION: task #N` if findings
+came, otherwise at Lead's next end-of-turn idle check, which finds the task still `IN_REVIEW` with a
+line in `## Second opinions` and handles it per "When a Second Opinion Does Not Come"
+(`phase2-monitoring.md`). Until it ends, that check cannot fire
 at all: it runs only when nothing is running (`team-runtime.md` §3), so a turn that never ends is
 noticed by nothing. Lead's remedy is then the same two actions as on every other path, taken from any
 turn it is already in: `TaskStop second-reviewer-{task id}`, then `SECOND REVIEWER: none` with
@@ -540,23 +691,36 @@ One append-only file per run: `.claude/teams/{team-name}/ledger.jsonl`. One JSON
 appended with `>>` — never rewritten, so concurrent writers cannot clobber each other.
 
 ```json
-{"ts":"2026-08-18T18:27:34","event":"launch","role":"coder","engine":"codex","task":"B2","session":"01a0157c-2b45-7243-8a37-13777eb171c1","out":".claude/teams/feature-x/engine/coder/001.out.txt"}
-{"ts":"2026-08-18T18:39:02","event":"done","role":"coder","session":"01a0157c-...","result":"14 files changed"}
+{"ts":"2026-09-23T10:19:13+02:00","event":"launch","role":"coder-6","engine":"cursor","task":"7","label":"001","pid":2558942,"prompt":"/…/engine/coder-6/001.prompt.md","out":"/…/engine/coder-6/001.out"}
+{"ts":"2026-09-23T10:23:44+02:00","event":"done","role":"coder-6","engine":"cursor","task":"7","label":"001","pid":2558942,"exit":0,"wall_s":271,"session":"a7ced0f3-…","out":"/…/001.out","result":"/…/001.out.result.md"}
+{"ts":"2026-09-23T10:26:02+02:00","event":"checks_done","role":"coder-6","task":"7","result":"pass"}
+{"ts":"2026-09-23T10:27:15+02:00","event":"committed","role":"coder-6","task":"7","commit":"fcf0373"}
 ```
 
-`event` is `launch`, `engine_done`, `checks_done`, `committed`, `done` or `failed`. Omit fields that
-do not apply.
+`event` is one of:
 
-The intermediate events are what make silence diagnosable: a ledger whose last line is `engine_done`
+| Event | Written by | Meaning |
+|-------|-----------|---------|
+| `launch` | `run-engine.sh`, at once | The engine process started; `pid` is the worker to check with `kill -0` |
+| `done` / `failed` | `run-engine.sh`, when the engine exits | The reply is on disk (`result`), or why not (`reason`); `wall_s` is measured, not estimated |
+| `relayed` | the proxy | It triaged the reply and sent it on (it also `touch`es `<out>.taken`) |
+| `checks_done` / `committed` | a coder proxy | Self-checks finished / the commit landed |
+
+`engine_done` appears only in ledgers written before 0.13.1; read it as `done`.
+
+The later events are what make silence diagnosable: a ledger whose last line for a role is `done`
 from forty minutes ago tells Lead that the engine finished and the proxy stopped reporting — the
 difference between "still thinking" and "dead", established without asking anyone. See
 `phase2-monitoring.md` "When a Teammate Goes Quiet".
 
 ### Who writes it
 
-Whoever starts an external engine — a proxy teammate, or Lead for a one-shot role — appends the
-`launch` line **as soon as the session id is known**, and a `done` (or `failed`) line when the run
-ends. Two lines per run, no reading, no coordination.
+**`scripts/run-engine.sh` writes `launch` and `done` / `failed`** for every engine call, with the
+real time from `date -Is` — nobody types a time into the ledger by hand any more (on 2026-09-22 two
+hand-written `engine_done` times were 17 and 26 minutes later than the engine actually finished). The caller — a proxy teammate, or
+Lead for a one-shot role — adds only the events the script cannot know: `relayed`, and for a coder
+`checks_done` and `committed`, each with `date -Is` for `ts`. One `>>` append each, no reading, no
+coordination.
 
 ### When the ledger is missing
 
@@ -572,9 +736,10 @@ that makes ledger discipline non-critical — the map can always be rebuilt from
 
 ### What the ledger replaces
 
-Nothing else changes. `engine/{role}/NNN.prompt.md` and `NNN.out.txt` stay: the prompt file is how a
-long prompt is passed to the CLI at all, and the out file is how the caller reads the result. They
-are mechanism, not backup. The ledger is what makes the engine's own recording findable afterwards.
+Nothing else changes. `engine/{role}/NNN.prompt.md`, `NNN.out`, `NNN.out.result.md` and
+`NNN.out.done` stay: the prompt file is how a long prompt is passed to the CLI at all, the reply file
+is how the caller reads the result, and the marker is how it knows the result is complete. They are
+mechanism, not backup. The ledger is what makes the engine's own recording findable afterwards.
 
 ---
 
