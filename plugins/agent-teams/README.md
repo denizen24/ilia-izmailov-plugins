@@ -320,6 +320,11 @@ Copy `agent-teams.example.json` to `~/.claude/agent-teams.json` and change only 
 
 Supported engines: `claude` (default), `codex`, `kimi`, `grok`, `cursor`.
 
+Model pick for Grok roles the team waits on: for `second-reviewer` and an architect on Cursor, use
+`grok-4.7-xhigh-fast`. Measured on 2026-09-23: 10.4 s on a short task against 16 s for plain
+`grok-4.7-xhigh`, with the same answer; on long reviews plain xhigh took 7–16 minutes a call, spending
+50–60 thousand tokens on reasoning. Background critics that nobody waits on can keep plain xhigh.
+
 How each kind of role is moved:
 
 - **One-shot roles** (researchers, risk tester, CI/spec verifiers, legacy scan) — no Claude agent is
@@ -339,6 +344,12 @@ What the proxy does and does not do:
   and makes the commit.
 - It triages every finding against the cited lines before relaying it, because external engines
   over-report.
+- It launches every engine call through `scripts/run-engine.sh`, which detaches the engine, keeps
+  its output, reply, session id and a completion marker on disk, and writes the ledger with real
+  times. The proxy waits on that marker only, so a reply survives the proxy dying or the session
+  restarting, and a finished call is never paid for twice.
+- For a review it writes the diff to a file first and hands the engine the path — never `sudo`,
+  which a read-only sandbox refuses.
 
 **Optional depth on SENSITIVE tasks.** When the reviewer marks a task SENSITIVE and you have
 configured a `second-reviewer` on a different engine, that engine reads the same task and sends its
@@ -391,6 +402,9 @@ agent-teams/
 │   ├── spec-verifier.md
 │   ├── tech-lead.md
 │   └── unified-reviewer.md
+├── scripts/
+│   ├── engine-sessions.py
+│   └── run-engine.sh
 ├── skills/
 │   ├── conventions/
 │   │   └── SKILL.md
