@@ -48,6 +48,12 @@ class Fixture:
         data.update(fields)
         (self.run / "runs" / f"{name}.json").write_text(json.dumps(data), encoding="utf-8")
 
+    def touch(self, rel, when):
+        path = self.root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("x = 1\n", encoding="utf-8")
+        os.utime(path, (when.timestamp(), when.timestamp()))
+
     def mail(self, box, frm, kind, task, body, name=None):
         (self.run / "mail" / box).mkdir(parents=True, exist_ok=True)
         name = name or f"20260924T115900_{frm}_{kind}_task{task}.md"
@@ -96,6 +102,13 @@ class Escalations(unittest.TestCase):
         st.ack(f.run, name)
         self.assertEqual(f.kinds(), [("P4", "ok", "")])
 
+    def test_ack_accepts_the_full_path_of_the_letter(self):
+        f = Fixture(self)
+        f.run_card("coder-3")
+        name = f.mail("lead", "coder-3", "QUESTION", "3", "QUESTION: task 3. Which endpoint?")
+        st.ack(f.run, str(f.run / "mail" / "lead" / name))
+        self.assertEqual(f.kinds(), [("P4", "ok", "")])
+
     def test_question_is_p1_answer_needed(self):
         f = Fixture(self)
         f.run_card("coder-3")
@@ -136,12 +149,48 @@ class FirstMinute(unittest.TestCase):
         f.run_card("coder-3", spawnedAt=iso(NOW - timedelta(seconds=200)), lastEventAt=iso(NOW - timedelta(seconds=200)))
         self.assertIn(("P1", "first_minute_silent", "coder-3"), f.kinds())
 
-    def test_a_changed_task_file_counts_as_life(self):
+    def test_a_task_file_touched_after_the_start_counts_as_life(self):
         f = Fixture(self)
-        (f.root / "src").mkdir()
-        (f.root / "src" / "t3.py").write_text("x = 1\n", encoding="utf-8")
+        f.touch("src/t3.py", NOW - timedelta(seconds=100))
         f.run_card("coder-3", spawnedAt=iso(NOW - timedelta(seconds=200)), lastEventAt=iso(NOW - timedelta(seconds=200)),
                    files=["src/t3.py"])
+        self.assertEqual(f.kinds(), [("P4", "ok", "")])
+
+    def test_a_task_file_touched_before_the_start_is_not_life(self):
+        f = Fixture(self)
+        f.touch("src/t3.py", NOW - timedelta(seconds=400))
+        f.run_card("coder-3", spawnedAt=iso(NOW - timedelta(seconds=200)), lastEventAt=iso(NOW - timedelta(seconds=200)),
+                   files=["src/t3.py"])
+        self.assertIn(("P1", "first_minute_silent", "coder-3"), f.kinds())
+
+    def test_each_first_minute_alarm_sounds_once(self):
+        f = Fixture(self)
+        f.run_card("coder-3", spawnedAt=iso(NOW - timedelta(seconds=90)), lastEventAt=iso(NOW - timedelta(seconds=90)))
+        self.assertIn(("P2", "first_minute_silent", "coder-3"), f.kinds())
+        self.assertEqual(f.kinds(), [("P4", "ok", "")], "та же P2 второй раз")
+        f.run_card("coder-3", spawnedAt=iso(NOW - timedelta(seconds=200)), lastEventAt=iso(NOW - timedelta(seconds=200)))
+        self.assertIn(("P1", "first_minute_silent", "coder-3"), f.kinds())
+        self.assertEqual(f.kinds(), [("P4", "ok", "")], "та же P1 второй раз")
+
+    def test_a_participant_that_never_woke_becomes_silent_too_long_after_two_intervals(self):
+        f = Fixture(self)
+        f.run_card("coder-3", spawnedAt=iso(NOW - timedelta(seconds=200)), lastEventAt=iso(NOW - timedelta(seconds=200)),
+                   checkAfterSec=300)
+        self.assertIn(("P1", "first_minute_silent", "coder-3"), f.kinds())
+        f.run_card("coder-3", spawnedAt=iso(NOW - timedelta(seconds=700)), lastEventAt=iso(NOW - timedelta(seconds=700)),
+                   checkAfterSec=300)
+        self.assertEqual(f.kinds()[0], ("P0", "silent_too_long", "coder-3"))
+
+    def test_the_clock_starts_at_started_at_not_at_the_card(self):
+        f = Fixture(self)
+        f.run_card("coder-3", spawnedAt=iso(NOW - timedelta(minutes=10)), startedAt=iso(NOW - timedelta(seconds=30)),
+                   lastEventAt=iso(NOW - timedelta(seconds=30)))
+        self.assertEqual(f.kinds(), [("P4", "ok", "")])
+
+    def test_a_role_without_a_task_is_waiting_not_silent(self):
+        f = Fixture(self)
+        f.run_card("unified-reviewer", role="reviewer", task="", status="running",
+                   spawnedAt=iso(NOW - timedelta(seconds=400)), lastEventAt=iso(NOW - timedelta(seconds=400)))
         self.assertEqual(f.kinds(), [("P4", "ok", "")])
 
     def test_an_own_event_after_spawn_counts_as_life(self):
@@ -161,6 +210,20 @@ class Checkpoints(unittest.TestCase):
         f = Fixture(self)
         f.run_card("coder-3", spawnedAt=iso(NOW - timedelta(minutes=60)), lastEventAt=iso(NOW - timedelta(minutes=31)))
         self.assertEqual(f.kinds()[0], ("P0", "silent_too_long", "coder-3"))
+
+    def test_an_old_uncommitted_edit_does_not_keep_a_silent_coder_alive(self):
+        f = Fixture(self)
+        f.touch("src/t3.py", NOW - timedelta(minutes=45))
+        f.run_card("coder-3", spawnedAt=iso(NOW - timedelta(minutes=60)), lastEventAt=iso(NOW - timedelta(minutes=31)),
+                   files=["src/t3.py"])
+        self.assertEqual(f.kinds()[0], ("P0", "silent_too_long", "coder-3"))
+
+    def test_a_recent_edit_keeps_a_silent_coder_alive(self):
+        f = Fixture(self)
+        f.touch("src/t3.py", NOW - timedelta(minutes=5))
+        f.run_card("coder-3", spawnedAt=iso(NOW - timedelta(minutes=60)), lastEventAt=iso(NOW - timedelta(minutes=31)),
+                   files=["src/t3.py"])
+        self.assertNotIn("silent_too_long", [k for _, k, _ in f.kinds()])
 
     def test_shorter_interval_for_a_sensitive_task(self):
         f = Fixture(self)

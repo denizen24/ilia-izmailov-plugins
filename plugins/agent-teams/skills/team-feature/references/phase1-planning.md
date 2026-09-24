@@ -801,7 +801,9 @@ The reviewer starts narrow (~90k) and stays narrow, which is the entire point of
 `## Base Commit` — Phase 3 diffs the whole feature against it.
 
 **Supervisor files before every spawn** (`references/supervisor.md`). Create the run card and
-make sure the mailbox exists — one Bash call per teammate, before its `Task(...)`:
+make sure the mailbox exists — one Bash call per teammate, **right before** its `Task(...)` (the
+card's `spawnedAt` is the clock until the teammate's first `set status=running` stamps `startedAt`;
+a card made while Lead still composes prompts ages for nothing):
 
 ```bash
 mkdir -p .claude/teams/{team-name}/mail/lead
@@ -809,8 +811,9 @@ python3 {plugin}/scripts/run-state.py new .claude/teams/{team-name} coder-{N} ro
     files={comma-separated "Files to create/edit" of the task} checkAfterSec={300 if the task is RISK/SENSITIVE-marked, else 900}
 ```
 
-The reviewer gets its card the same way (`role=reviewer`, no task). After the spawn the card
-belongs to the teammate — Lead never edits `runs/` or `mail/` again.
+The reviewer gets its card the same way (`role=reviewer`, no task — `new` makes it `idle`, so
+the first-minute check leaves a role that waits for its first request alone; tech-lead likewise).
+After the spawn the card belongs to the teammate — Lead never edits `runs/` or `mail/` again.
 
 **One coder = one task, handed over by Lead.** A task is *available* when its Status is TODO and
 everything in its "Blocked by" is DONE (the conventions task never is — it waits for Phase 3). Spawn one coder per available task, up to --coders

@@ -398,6 +398,12 @@ this fork a script waits instead (`skills/team-feature/references/supervisor.md`
 - `scripts/run-state.py` / `scripts/team-mail.sh` — how teammates keep their card and drop a copy of
   each letter to Lead. Roles without Bash write the same files with `Write`.
 
+Measured on a real MEDIUM run (2026-09-24, 121-299): Lead's input tokens per wake fell from 2.18M
+to 0.93M against the same feature shape on 0.13.1. 0.14.1 fixes what that run showed: a
+first-minute alarm now sounds once (it woke Lead every tick), the clock starts at the teammate's
+own `startedAt`, a role without a task is waiting rather than silent, "edits in the task files"
+means mtime inside the window (not `git status`), and `ack` takes a path or a name.
+
 Tests: `python3 -m unittest discover -s scripts/tests` from `plugins/agent-teams`.
 
 ## Structure

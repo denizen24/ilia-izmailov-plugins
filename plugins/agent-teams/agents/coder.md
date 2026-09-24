@@ -227,9 +227,17 @@ Your spawn prompt has a `SUPERVISOR` block with the run dir and two commands. A 
 watches the team while Lead sleeps (`skills/team-feature/references/supervisor.md`); it can only see
 what you write down:
 
-- **Your card** `runs/coder-{N}.json` — update the status at every step:
+- **Your card** `runs/coder-{N}.json` — your very first command, before reading anything:
+  `python3 {plugin}/scripts/run-state.py set {run dir} coder-{N} status=running` — it stamps
+  `startedAt`, the moment your first-minute clock starts (Lead created the card minutes before
+  spawning you). Then update the status at every step:
   `python3 {plugin}/scripts/run-state.py set {run dir} coder-{N} status=<in_review|fixing|done|stuck> [note="..."]`.
-  Every `set` stamps the time; a card that stays unchanged for two intervals reads as a dead coder.
+  Every `set` stamps the time; a card that stays unchanged for two intervals, with no task file
+  touched in that window, reads as a dead coder.
+- **Never end a turn with a background job as the only thing that would resume you.** Run
+  self-checks and the full test suite in the foreground with a timeout (`timeout 900 …`). A hung
+  background test run does not resume you, and the supervisor cannot tell a sleeping coder from a
+  thinking one — on 2026-09-24 that cost a run 45 minutes until Lead sent `STATUS?`.
 - **A mail copy of every message you send to Lead** — the same text, right after the `SendMessage`:
   `{plugin}/scripts/team-mail.sh {run dir} lead coder-{N} <KIND> task {id} -- "<text>"`,
   KIND being the message's first word (`DONE`, `STUCK`, `QUESTION`, `ESCALATION`, `REVIEW_LOOP`,

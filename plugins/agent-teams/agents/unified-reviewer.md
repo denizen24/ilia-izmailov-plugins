@@ -150,7 +150,9 @@ have no Bash, so you keep your card with `Write`, whole file each time:
 ```
 
 Write it with `status: "reviewing"` when you start a review, and again with `status: "idle"` (task
-empty) after you sent the digest. Keep `spawnedAt` if the file already has one.
+empty) after you sent the digest. Keep `spawnedAt` if the file already has one. Lead creates the
+card as `idle` — a role without a task is waiting, not silent, so nothing watches you until your
+first review; your READY needs no card write.
 
 A `SENSITIVE:` message to Lead gets a mail copy — `Write` a file
 `.claude/teams/{team-name}/mail/lead/{YYYYMMDDTHHMMSS}_unified-reviewer_SENSITIVE_task{id}.md`:

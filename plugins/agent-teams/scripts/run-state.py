@@ -2,12 +2,15 @@
 """run-state.py — карточка участника runs/<name>.json: создать при спавне, обновить по ходу.
 
   run-state.py new <run-dir> <name> role=<роль> task=<id> [files=a.py,b.py] [checkAfterSec=900] \
-                   [acceptance=...] [nonGoals=...]          — ведущий, перед спавном
+                   [acceptance=...] [nonGoals=...]          — ведущий, прямо перед спавном
+                   (роль без задачи — рецензент, техлид — рождается `idle`: ждёт первый запрос)
   run-state.py set <run-dir> <name> status=<running|in_review|fixing|reviewing|done|stuck|idle|stopped> \
                    [note=...] [task=<id>]                    — сам участник, при каждом событии
   run-state.py show <run-dir> [<name>]
 
-`set` всегда ставит lastEventAt=сейчас. Файл переписывается целиком через
+`set` всегда ставит lastEventAt=сейчас; первый `set status=running` ставит ещё и
+startedAt — от него тик считает первую минуту, а не от карточки, которую ведущий
+завёл за несколько минут до спавна. Файл переписывается целиком через
 временный и rename: у карточки один владелец, гонок нет. Роль без Bash пишет
 тот же JSON инструментом Write — поля те же.
 """
@@ -59,8 +62,9 @@ def main(argv):
     name, fields = argv[2], parse(argv[3:])
     path = run / "runs" / f"{name}.json"
     if cmd == "new":
-        data = {"name": name, "role": fields.pop("role", ""), "task": fields.pop("task", ""),
-                "spawnedAt": now(), "lastEventAt": now(), "status": "running",
+        role, task = fields.pop("role", ""), fields.pop("task", "")
+        data = {"name": name, "role": role, "task": task,
+                "spawnedAt": now(), "lastEventAt": now(), "status": "running" if task else "idle",
                 "files": fields.pop("files", []), "acceptance": fields.pop("acceptance", []),
                 "nonGoals": fields.pop("nonGoals", []), "checkAfterSec": fields.pop("checkAfterSec", 900), "note": ""}
         data.update(fields)
@@ -69,6 +73,8 @@ def main(argv):
         data = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {"name": name, "spawnedAt": now()}
         data.update(fields)
         data["lastEventAt"] = now()
+        if fields.get("status") == "running" and not data.get("startedAt"):
+            data["startedAt"] = data["lastEventAt"]
         write(path, data)
     else:
         raise SystemExit(__doc__)

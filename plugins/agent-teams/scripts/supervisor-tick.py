@@ -23,10 +23,19 @@
       дольше двух интервалов
   P1  DONE участника, которого ведущий ещё не отметил в PLAN.md (accept_needed);
       письмо ведущему без ответа (QUESTION / ESCALATION / SENSITIVE / QUEUED);
-      первая минута: участник молчит уже 3 минуты
-  P2  первая минута: спавн старше 60 с, а признаков жизни нет
+      первая минута: участник молчит уже 3 минуты (один раз)
+  P2  первая минута: старт старше 60 с, а признаков жизни нет (один раз)
   P3  контрольная точка: с последнего события прошёл интервал участника
   P4  всё тихо
+
+Первая минута считается от `startedAt` карточки — его ставит сам участник первым
+`run-state.py set … status=running`; пока его нет, от `spawnedAt` (ведущий создаёт
+карточку до спавна, и между ними бывают минуты). Каждая тревога первой минуты
+звучит один раз (память тика); дальше участник под обычным надзором: контрольная
+точка через интервал, `silent_too_long` через два. Роль без задачи (рецензент,
+техлид до первого запроса) первой минуты не имеет — она ждёт, а не молчит.
+«Правки в файлах задачи» — файлы с mtime внутри окна, а не `git status`: правка,
+сделанная час назад и не закоммиченная, участника живым не делает.
 
 Использование:
   supervisor-tick.py <run-dir> [--root <корень репозитория>] [--json] [--now ISO]
@@ -35,7 +44,6 @@
 import json
 import os
 import re
-import subprocess
 import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -135,8 +143,9 @@ def read_mail(run_dir, box):
 
 
 def acked(run_dir):
+    """Имена писем, на которые ведущий ответил, — всегда basename: `ack` принимает и путь."""
     f = run_dir / "state" / "acked.log"
-    return set(f.read_text(encoding="utf-8").split()) if f.exists() else set()
+    return {Path(x).name for x in f.read_text(encoding="utf-8").split()} if f.exists() else set()
 
 
 def pending_open(run_dir, now):
@@ -194,16 +203,23 @@ def engine_calls(run_dir, now):
     return calls
 
 
-def changed_files(root, files):
-    """Есть ли среди файлов задачи изменённые в рабочем дереве (git status)."""
-    if not root or not files:
+def touched_since(root, files, since):
+    """Есть ли среди файлов задачи файл, изменённый после `since` (по mtime).
+
+    Не `git status`: он показывает всё незакоммиченное, и правка часовой давности
+    делала бы участника живым до самого коммита (24.09.2026 так 45 минут не
+    видели кодера, уснувшего на зависшем jest). Нового, ещё не созданного файла
+    нет — значит, и правки нет."""
+    if not root or not files or since is None:
         return False
-    try:
-        out = subprocess.run(["git", "-C", str(root), "status", "--short", "--", *files],
-                             capture_output=True, text=True, timeout=20).stdout
-    except (OSError, subprocess.SubprocessError):
-        return False
-    return bool(out.strip())
+    for f in files:
+        try:
+            mtime = datetime.fromtimestamp((Path(root) / f).stat().st_mtime, tz=timezone.utc)
+        except OSError:
+            continue
+        if mtime > since:
+            return True
+    return False
 
 
 def tick(run_dir, root=None, now=None):
@@ -214,7 +230,7 @@ def tick(run_dir, root=None, now=None):
     root = Path(root) if root else run_dir.resolve().parents[1]
     memory_file = run_dir / "state" / "supervisor.json"
     memory = read_json(memory_file, {})
-    firsts = memory.get("firstMinute", {})          # name -> "ok" | "silent"
+    firsts = memory.get("firstMinute", {})          # name -> "ok" | "p2" | "p1" (какая тревога уже подана)
     checkpoints = memory.get("checkpoints", {})     # name -> ISO последней контрольной точки
 
     tasks = plan_tasks(run_dir)
@@ -267,31 +283,35 @@ def tick(run_dir, root=None, now=None):
         if status == "stuck":
             add("P0", "stuck", run=name, detail=run.get("note", ""), ref=f"runs/{name}.json")
             continue
-        spawned = parse_ts(run.get("spawnedAt"))
+        spawned = parse_ts(run.get("startedAt")) or parse_ts(run.get("spawnedAt"))
         last = parse_ts(run.get("lastEventAt")) or spawned
+        if last and spawned and last < spawned:
+            last = spawned
         age = int((now - spawned).total_seconds()) if spawned else None
         since = int((now - last).total_seconds()) if last else None
         interval = int(run.get("checkAfterSec") or DEFAULT_CHECK_SEC)
         task = str(run.get("task", ""))
         files = run.get("files") or tasks.get(task, {}).get("files", [])
 
-        # первая минута
-        if age is not None and firsts.get(name) != "ok":
-            alive = (last and spawned and last > spawned) or name in signals_from or changed_files(root, files) \
+        # первая минута — только у роли с задачей, и каждая тревога один раз
+        if not task:
+            firsts[name] = "ok"
+        if age is not None and firsts.get(name) not in ("ok", "p1"):
+            alive = (last and spawned and last > spawned) or name in signals_from or touched_since(root, files, spawned) \
                 or any(c["role"] == name for c in engine_calls(run_dir, now))
             if alive:
                 firsts[name] = "ok"
             elif age >= FIRST_MINUTE_LOUD_SEC:
-                firsts[name] = "silent"
-                add("P1", "first_minute_silent", run=name, detail=f"{age} с после спавна — ни письма, ни правок, ни движка",
+                firsts[name] = "p1"
+                add("P1", "first_minute_silent", run=name, detail=f"{age} с после старта — ни письма, ни правок, ни движка",
                     ref=f"runs/{name}.json")
-            elif age >= FIRST_MINUTE_SEC:
-                firsts[name] = "silent"
-                add("P2", "first_minute_silent", run=name, detail=f"{age} с после спавна без признаков жизни", ref=f"runs/{name}.json")
+            elif age >= FIRST_MINUTE_SEC and firsts.get(name) != "p2":
+                firsts[name] = "p2"
+                add("P2", "first_minute_silent", run=name, detail=f"{age} с после старта без признаков жизни", ref=f"runs/{name}.json")
 
-        # молчание и контрольные точки
-        if since is not None and firsts.get(name) == "ok":
-            if since >= 2 * interval and not changed_files(root, files):
+        # молчание и контрольные точки — после первой минуты (живой или уже названный молчащим)
+        if since is not None and firsts.get(name) in ("ok", "p1"):
+            if since >= 2 * interval and not touched_since(root, files, now - timedelta(seconds=2 * interval)):
                 add("P0", "silent_too_long", run=name, detail=f"{since // 60} мин без событий и без правок в файлах задачи",
                     ref=f"runs/{name}.json")
             elif since >= interval:
@@ -326,7 +346,7 @@ def ack(run_dir, name):
     run_dir = Path(run_dir)
     (run_dir / "state").mkdir(exist_ok=True)
     with (run_dir / "state" / "acked.log").open("a", encoding="utf-8") as f:
-        f.write(name + "\n")
+        f.write(Path(name).name + "\n")
 
 
 def main(argv):
