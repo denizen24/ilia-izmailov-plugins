@@ -404,6 +404,14 @@ first-minute alarm now sounds once (it woke Lead every tick), the clock starts a
 own `startedAt`, a role without a task is waiting rather than silent, "edits in the task files"
 means mtime inside the window (not `git status`), and `ack` takes a path or a name.
 
+**0.15.0 — the parent accepts the diff, not the summary.** Every task in PLAN.md carries a
+contract (working root, out of scope, pitfalls, handover path) and *checkable* acceptance criteria.
+A coder's DONE sets the task to `ACCEPTING`; a one-shot acceptance checker (`spec-verifier` on
+Claude, or an engine) reads the task, the diff of its commits and, if any, the proxy's deviation
+journal, runs the task's own test command and answers `ACCEPT: task #N — PASS|FAIL`. Only PASS
+makes the task DONE; a FAIL reopens it once for a fresh coder. Proxies of external engines keep
+`reports/deviations-<role>-task<id>.md` — expectation against fact — for the checker and for Phase 3.
+
 Tests: `python3 -m unittest discover -s scripts/tests` from `plugins/agent-teams`.
 
 ## Structure

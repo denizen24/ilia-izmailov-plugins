@@ -351,6 +351,26 @@ tool result → also send Lead `QUEUED: <name>` + the same text. A `RESEND:` you
   outside its file list: {paths}` to Lead and stop. You run the self-checks and you make the
   commit — never let the engine commit.
 
+## Deviation Journal — expectation against fact
+
+An external engine is the one teammate whose work nobody in the team watched being done, so the
+run keeps a journal of where what came back differed from what was asked. You append to
+`.claude/teams/{team-name}/reports/deviations-{your name}-task{id}.md` — one line per deviation,
+right when you see it:
+
+```
+{HH:MM} | ожидание: {what the prompt asked} | факт: {what the engine did} | сделано: {resumed with …, dropped, reported STUCK}
+```
+
+What counts: a file touched outside the allowed list; a finding you dropped as NOISE (say which);
+a `resume` that lost the session and had to restart; a `ВОПРОС ОРКЕСТРАТОРУ`; a retry; an engine
+reply that claims a check it did not run. What does not: the engine's style, its wording, its
+reasoning length. No deviations — no file; do not create an empty one.
+
+Who reads it: the acceptance checker on that task's DONE (an unresolved deviation on a criterion
+is a FAIL), Phase 3 (counts the journals in the summary), and whoever debugs a run afterwards.
+The journal never goes into a message — the path does.
+
 ## Output Contract (append to every prompt you send)
 
 ```

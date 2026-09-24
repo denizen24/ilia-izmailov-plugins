@@ -93,6 +93,32 @@ class DoneWithoutAccept(unittest.TestCase):
         self.assertEqual(f.kinds(), [("P4", "ok", "")])
 
 
+class Acceptance(unittest.TestCase):
+    def test_accepting_status_silences_accept_needed(self):
+        f = Fixture(self)
+        f.run_card("coder-3", status="done")
+        f.mail("lead", "coder-3", "DONE", "3", "DONE: task 3")
+        f.plan({"3": "ACCEPTING(coder-3)"})
+        self.assertEqual(f.kinds(), [("P4", "ok", "")])
+
+    def test_a_ready_acceptance_report_is_p1(self):
+        f = Fixture(self)
+        f.run_card("coder-3", status="done")
+        f.plan({"3": "ACCEPTING(coder-3)"})
+        (f.run / "reports").mkdir()
+        (f.run / "reports" / "accept-task3.md").write_text("ACCEPT: task 3 — PASS\n- criterion 1: PASS\n", encoding="utf-8")
+        acts = f.tick()["actions"]
+        self.assertEqual([(a["priority"], a["kind"]) for a in acts], [("P1", "accept_result")])
+        self.assertIn("PASS", acts[0]["detail"])
+
+    def test_a_reopened_task_is_the_coders_again(self):
+        f = Fixture(self)
+        f.run_card("coder-3", status="done")
+        f.mail("lead", "coder-3", "DONE", "3", "DONE: task 3")
+        f.plan({"3": "REOPENED(coder-6)"})
+        self.assertEqual(f.kinds(), [("P4", "ok", "")])
+
+
 class Escalations(unittest.TestCase):
     def test_stuck_letter_is_p0_and_ack_clears_it(self):
         f = Fixture(self)

@@ -22,6 +22,7 @@
       движок упал или досчитал, а результат никто не забрал; участник молчит
       дольше двух интервалов
   P1  DONE участника, которого ведущий ещё не отметил в PLAN.md (accept_needed);
+      готовый отчёт приёмки reports/accept-task<id>.md при статусе ACCEPTING (accept_result);
       письмо ведущему без ответа (QUESTION / ESCALATION / SENSITIVE / QUEUED);
       первая минута: участник молчит уже 3 минуты (один раз)
   P2  первая минута: старт старше 60 с, а признаков жизни нет (один раз)
@@ -260,9 +261,18 @@ def tick(run_dir, root=None, now=None):
             add("P1", "answer_needed", run=letter["from"], detail=f"{kind}: {letter['first']}", ref=f"mail/lead/{letter['file']}")
     for task, letter in mailed_done.items():
         status = tasks.get(task, {}).get("status", "")
-        if status != "DONE":
-            add("P1", "accept_needed", run=letter["from"], detail=f"task {task}: {letter['first']} (PLAN: {status or 'нет задачи'})",
-                ref=f"mail/lead/{letter['file']}")
+        if status == "DONE" or status.startswith(("ACCEPTING", "REOPENED")):
+            continue   # принято, либо приёмка уже идёт / задача вернулась кодеру — DONE-письмо отработано
+        add("P1", "accept_needed", run=letter["from"], detail=f"task {task}: {letter['first']} (PLAN: {status or 'нет задачи'})",
+            ref=f"mail/lead/{letter['file']}")
+
+    # ---- приёмка: отчёт проверяющего лежит, а ведущий ещё не вынес решение
+    for task, info in tasks.items():
+        if info["status"].startswith("ACCEPTING"):
+            report = run_dir / "reports" / f"accept-task{task}.md"
+            if report.exists():
+                verdict = "PASS" if re.search(r"^ACCEPT:.*\bPASS\b", report.read_text(encoding="utf-8", errors="replace"), re.M) else "FAIL/?"
+                add("P1", "accept_result", detail=f"task {task}: отчёт приёмки готов ({verdict})", ref=f"reports/accept-task{task}.md")
 
     # ---- движки
     for call in engine_calls(run_dir, now):

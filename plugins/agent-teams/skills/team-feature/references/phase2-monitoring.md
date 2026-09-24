@@ -29,7 +29,9 @@ everything that accumulated, not just the one message. Letters closed by an answ
 | Any teammate: `QUEUED: <name>` + a message | The sender's direct message may be lost. Log it in `pending.log` and deliver it as `RESEND: from <sender>` once `<name>` is idle (`team-runtime.md` §3). Do not read the files it mentions. | Nothing. |
 | Any teammate: `ALREADY ANSWERED: …` | The original got through after all. Mark the pending.log line `DELIVERED`. | Nothing. |
 | Coder: `IN_REVIEW: task #N` | Set the task to `IN_REVIEW(coder-N)` in PLAN.md. | `🔎 Task #N in review: {short title}` |
-| Coder: `DONE: task #N` | Set the task to DONE in PLAN.md. **If Phase is already VERIFICATION** (a Phase 3 conventions, fix or cleanup task): return to the Phase 3 step that was waiting on it — do not restart Phase 3. Otherwise spawn a coder for every task that just became available (TODO, all blockers DONE) while active coders < max. If every coding task is DONE (the conventions task does not count) → **change Phase in state.md to VERIFICATION and follow Phase 3 Instructions in state.md step by step.** | Task-done digest — see "Task-Done Digest" below. If transitioning: `🏁 All {N} tasks done — moving to verification.` |
+| Coder: `DONE: task #N` | **A DONE is a candidate, not a result.** Set the task to `ACCEPTING(coder-N)` in PLAN.md and spawn the acceptance checker — "Accepting a DONE" below. Only its `ACCEPT: task #N — PASS` makes the task DONE. Docs-only tasks (the conventions task, a cleanup that touches no code path) skip the checker: mark DONE at once. | `🔎 Задача #N сдана — принимаю по диффу.` |
+| Acceptance checker: `ACCEPT: task #N — PASS` (its return value, or the loop's `accept_result` on the report file) | Write the report to `reports/accept-task{id}.md` if the checker was a Claude agent (an engine's `--report` already did). Set the task to DONE in PLAN.md. **If Phase is already VERIFICATION** (a Phase 3 fix task): return to the Phase 3 step that was waiting on it — do not restart Phase 3. Otherwise spawn a coder for every task that just became available (TODO, all blockers DONE) while active coders < max. If every coding task is DONE (the conventions task does not count) → **change Phase in state.md to VERIFICATION and follow Phase 3 Instructions in state.md step by step.** | Task-done digest — see "Task-Done Digest" below. If transitioning: `🏁 All {N} tasks done — moving to verification.` |
+| Acceptance checker: `ACCEPT: task #N — FAIL` + the failed criteria | Once per task: set the task to `REOPENED(coder-M)` and spawn a **fresh** coder with the task section, the failed criteria quoted from the report and the handover note — the coder that sent DONE has stood down. Its DONE goes through acceptance again. A second FAIL is not retried: the task stays `REOPENED`, goes to Human Checks as unresolved with both reports, and the run continues. | `🔨 Задача #N не принята: {failed criteria in product terms} — поднял свежего кодера доделать.` Second time: `⏸️ Задача #N не прошла приёмку дважды — оставляю на ручную проверку.` |
 | Coder: `QUESTION: task #N. [question]` | Answer from Phase 1 context if possible. If not — dispatch a researcher (Explore or general-purpose with WebSearch), then SendMessage the answer to coder. | Only if a researcher was dispatched: `🔍 Task #N raised a question ({what, in product terms}) — researching.` Answered-from-context questions are noise, don't print. |
 | Coder: `STUCK: task #N` | First, try to answer from Phase 1 context. Only dispatch a researcher if the problem requires reading code not yet seen. Then: adjust the task, split it, or reassign to a different coder. | `⏸️ Task #N stuck: {problem in product terms} — {what Lead is doing about it}` |
 | Coder: `LEGACY_FOUND: task #N` | Note it (entries are in LEGACY_REPORT.md; handled in Phase 3). | `🧹 Task #N left old code behind ({N} item(s)) — I'll ask you what to do with it at the end.` |
@@ -39,6 +41,77 @@ everything that accumulated, not just the one message. Letters closed by an answ
 | Tech Lead: `DECISION: [one-liner]` (MEDIUM only) | No action — decision is already logged in DECISIONS.md by its author. On SIMPLE/COMPLEX you write these yourself. | `📋 Decision: {the one-liner, in product terms — what was decided and why}` |
 | Proxy teammate: `ENGINE RUNNING: {role} on {engine}, started {HH:MM}` + pid, output path and done marker | Record the start time, pid and done-marker path in state.md. No other action. **Exception — `second-reviewer-{id}`:** record it and print nothing. The `🔬` line for that task already told the user a second opinion is running; a second line for the same event would open something the feed never closes. | `⚙️ {role} работает на {engine}, запущен в {HH:MM}.` For `second-reviewer-{id}`, nothing. |
 | Proxy teammate: `ENGINE_DOWN: {role}. {reason}` | `TaskStop` the proxy if it is still running. Apply `fallback` from the engine config (default `claude`): spawn the normal Claude teammate under the **same name** (latest wins). A reviewer or tech-lead successor gets its normal Step 5 prompt and replies READY — and for `unified-reviewer` that prompt carries its `SECOND REVIEWER AVAILABLE:` line on the same condition as every other spawn of it (`phase1-planning.md`), **with the engine comparison redone for this successor and for nothing else**: the successor now runs on `claude`, so if `second-reviewer` in the Step 0b table also resolved to `claude`, set it to `none` for the rest of the run, drop the line, and say so once — `⚙️ unified-reviewer перешёл на Claude, второе мнение было тоже на Claude — отключаю его: одна и та же модель второго мнения не даёт.` Otherwise carry the line unchanged. This is the one exception to "resolved once at Step 0b, never re-evaluated": the comparison exists so the two reviewers are never the same model, and a fallback is the one event that can make them the same. Dropping the line without this check silently ends second opinions for the run; carrying it without this check silently pairs Claude with Claude and tags its findings `[second:claude]`; a coder successor gets the normal coder prompt with its task and starts working. After READY, deliver any `OPEN` pending.log line for that name, and SendMessage every coder whose task is `IN_REVIEW` (reviewer) or who escalated (tech-lead): "ROSTER UPDATE: {role} was replaced — if you are still waiting for an answer, re-send your request to {role}." If `fallback: "fail"`, stop the run and report. **Exception — `second-reviewer-{id}`: it has no successor.** `TaskStop` it, send `SendMessage(to="unified-reviewer", message="SECOND REVIEWER: none\ntask #N")` — the task id on the second line, since the reviewer may be parked on more than one task — clear that task's line from `## Second opinions`, and continue the run — full text in "When a Second Opinion Does Not Come". No fallback spawn: a Claude second opinion next to a Claude reviewer is not an independent one, it just costs twice and tags its findings `[second:claude]`. No ROSTER UPDATE either — coders do not know this name and must not learn it. | `⚙️ {engine} отвалился на роли «{role}» ({reason}) — переключил на Claude, работа продолжается.` For `second-reviewer-{id}`, that line instead, and only while that task's `🔬` is still open — not DONE, no close printed yet: `🔬 Второе мнение недоступно ({reason}) — ревьюер продолжает один.` |
+
+## Accepting a DONE — the parent verifies the diff, not the summary
+
+The coder's digest says what it believes it did; the reviewer approved what it read. Neither is the
+acceptance: a task is DONE when a **one-shot checker that has read nothing but the task and its diff**
+confirms every acceptance criterion in PLAN.md. That is the porch rule "the parent owns the
+acceptance", and it is why the criteria in PLAN.md have to be checkable (`phase1-planning.md`).
+
+The checker is the `acceptance-checker` role (`engines.md`): on `claude` it is a
+`Task(subagent_type="agent-teams:spec-verifier", ...)` with the prompt below; on an external engine
+the same prompt goes through `scripts/run-engine.sh` with `--report accept-task{id}.md` and the diff
+in a file (Mechanic A, no `sudo`, no `git` in the prompt). Lead spawns it and goes back to sleep on
+the loop: the loop wakes Lead with `accept_result` the moment `reports/accept-task{id}.md` exists.
+
+Before the spawn, one Bash call writes the diff — the task's commits, which the DONE digest names:
+
+```bash
+R=.claude/teams/{team}; git show {sha1} {sha2} -- {task files} > $R/engine/accept-task{id}.diff
+```
+
+```
+Task(subagent_type="agent-teams:spec-verifier",
+  prompt="ACCEPTANCE of task #{id}, team {team-name}. You verify the diff against the task's own
+acceptance criteria — nothing else. You have not seen the coder's report or the review, and you do
+not need them.
+
+--- TASK (verbatim from PLAN.md) ---
+{the whole ## Task {id} section}
+--- END TASK ---
+Diff of the task's commit(s): {path of accept-task{id}.diff}   (commits {shas}; do not rebuild it)
+Deviation journal, if the task ran on an external engine: .claude/teams/{team-name}/reports/deviations-*-task{id}.md — read it if it exists; a deviation the coder did not resolve is a FAIL on the criterion it touches.
+Out of scope (from the contract): {nonGoals}
+
+For every acceptance criterion: run the command or check the fact, quote the output, verdict
+PASS / FAIL / UNCLEAR. Then three global checks: (1) the diff touches only the task's files;
+(2) the task's own test command from Tooling is green (run it — it is the one command you run
+that changes nothing); (3) nothing in Out of scope changed.
+Reply with exactly this shape, first line first:
+ACCEPT: task #{id} — PASS            (or FAIL)
+- {criterion}: PASS — {evidence}
+- ...
+Global: files PASS/FAIL, tests PASS/FAIL, scope PASS/FAIL
+FAIL means at least one FAIL; UNCLEAR counts as FAIL and says what was unclear.")
+```
+
+Lead writes the return value to `reports/accept-task{id}.md` verbatim (one Write, no reading
+beyond the first line), then acts on the first line per the event table. The report is the
+task's acceptance record: Phase 3 counts `accept-task*.md` against the tasks and reports the
+tasks that reached DONE without one.
+
+**What this costs and buys.** One narrow one-shot per coding task — a spec-verifier starts small,
+reads a diff and runs one test command, and dies. What it buys is the rule "no DONE is accepted on
+the worker's summary alone": on 2026-09-17 a task passed three reviewers and the test suites while
+quietly dropping a notice users rely on, and only a reader of the combined diff caught it later.
+
+## First Minute and Adaptive Checkpoints
+
+The tick (`supervisor.md`) watches every card from its `startedAt` — the coder's first
+`run-state.py set … status=running` — and sounds each alarm once: `first_minute_silent` P2 at
+60 s, P1 at 180 s with no letter, no touched task file and no engine; then the ordinary
+checkpoints at the card's `checkAfterSec` (900 by default, 300 for a task the plan marks
+RISK/SENSITIVE), and `silent_too_long` P0 after two intervals with no event and no task file
+touched inside that window.
+
+On the P1: `STATUS?` to the teammate. It answers what it is doing or waiting for; if it never
+got its task (a lost spawn prompt, a wrong name), clarify and respawn. **Never respawn over a
+live writer**: `TaskStop` the silent one, confirm, and only then spawn the replacement under a new
+name — two coders on the same files destroy each other's uncommitted work. On `silent_too_long`
+the same `STATUS?` first — a teammate asleep on its own background job wakes on it at once
+(24.09.2026: 45 minutes of silence ended with one message) — and the dead-proxy remedy only when
+that goes unanswered.
 
 ## Task-Done Digest
 
@@ -64,7 +137,7 @@ Full list in SKILL.md and state.md — in short: no reading or reviewing code, n
 ## State File Updates
 
 After every event, update the run files:
-- `PLAN.md` — task status: TODO → IN_PROGRESS(coder-N) → IN_REVIEW(coder-N) → DONE. You are its only writer.
+- `PLAN.md` — task status: TODO → IN_PROGRESS(coder-N) → IN_REVIEW(coder-N) → ACCEPTING(coder-N) → DONE (REOPENED(coder-M) once, on a failed acceptance). You are its only writer.
 - `state.md` — coder spawns/shutdowns, reviewer rotations, escalations, and `## Second opinions`:
   one line per live `second-reviewer-{id}`, written at the spawn and cleared when its task is DONE
   or when you cancel that instance — never when the instance itself finishes
@@ -264,7 +337,7 @@ a park it never had. The instance is stopped, not handed over, and nothing arriv
 
 ## Spawning New Coders
 
-When a coder reports DONE:
+When the acceptance checker reports PASS for a task (a coder's DONE alone sets `ACCEPTING`):
 1. Set its task to DONE in PLAN.md.
 2. Find the tasks that are now available — Status TODO and every "Blocked by" task DONE.
 3. For each, while active coders < max: set it to `IN_PROGRESS(coder-N)` in PLAN.md, then spawn a

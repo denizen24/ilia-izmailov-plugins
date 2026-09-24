@@ -174,7 +174,7 @@ Execute these steps in order:
 
 2. **Dispatch researchers** (conditional) — adaptive: skip what's already known. Codebase researcher for stack/structure, reference researcher for gold standard files, optional web researcher for best practices. Skip all if `--no-research` or brief provides everything.
 
-3. **Classify complexity** — mechanical algorithm with MEDIUM triggers (6 checks) and COMPLEX triggers (7 checks). Not overridable. Pick the team name, write VERIFICATION_PLAN.md (SIMPLE/MEDIUM) or, on COMPLEX, compile it after the architect debate from their checks. Compile gold standard block for coders. Write PLAN.md — every task with acceptance criteria + convention checks. Lead is its only writer.
+3. **Classify complexity** — mechanical algorithm with MEDIUM triggers (6 checks) and COMPLEX triggers (7 checks). Not overridable. Pick the team name, write VERIFICATION_PLAN.md (SIMPLE/MEDIUM) or, on COMPLEX, compile it after the architect debate from their checks. Compile gold standard block for coders. Write PLAN.md — every task with a contract (working root, out of scope, pitfalls, handover), checkable acceptance criteria + convention checks. Lead is its only writer.
 
 4. **Validate plan** — SIMPLE: skip. MEDIUM: Tech Lead validates. COMPLEX: 3 Architects debate in Lead-run rounds (max 3), converge, one becomes Primary Architect, Lead compiles VERIFICATION_PLAN.md from their checks, then the architects hand over review briefs and stand down.
 
@@ -197,7 +197,7 @@ Execute these steps in order:
 
 - Prints a progress feed line for every meaningful event (see Progress Feed table in `phase2-monitoring.md`)
 - Tracks progress: task statuses in PLAN.md; roster, rotations and escalations in state.md
-- Hands out tasks from PLAN.md: marks a task DONE on the coder's report and spawns a coder, with the task in its prompt, for each task that became available (one task per coder — they stand down after it)
+- Hands out tasks from PLAN.md: on a coder's DONE sets the task to `ACCEPTING` and spawns a one-shot acceptance checker over the task's diff and its acceptance criteria; marks DONE only on its PASS (`phase2-monitoring.md`, "Accepting a DONE"), then spawns a coder, with the task in its prompt, for each task that became available (one task per coder — they stand down after it)
 - Rotates the reviewer every 3 completed tasks, so it does not accumulate the whole run
 - Handles STUCK/QUESTION/REVIEW_LOOP escalations (MEDIUM: tech-lead rules on escalations and review loops)
 - Detects a stalled teammate from the run ledger and the engine process — never by polling on a timer — and replaces it with a fresh finisher instead of doing the work itself

@@ -360,6 +360,10 @@ Review stats (post-implementation):
   Convention violations: N | Escalations: N
   Second opinion on {engine}: N task(s) | Findings offered: N | Confirmed: N
 
+Acceptance (parent verify per task):
+  Tasks accepted by the checker: N/{coding tasks} | reopened once: N | unresolved: N
+  Deviation journals from external engines: N file(s), N line(s)
+
 Verification:
   Automated checks: {N}/{total} passed
   Fix-verify iterations: {N}/3
@@ -393,6 +397,10 @@ rest of the run with it:
   headings in the same files. Those lines carry no severity token on purpose — they count here and
   nowhere else, never in the Security / Logic / Quality counts above.
 - **Engine:** the `second-reviewer` row of the Step 0b table.
+- **Acceptance:** `ls .claude/teams/{team-name}/reports/accept-task*.md | wc -l` against the coding
+  tasks in PLAN.md; `grep -l '^ACCEPT:.*FAIL' …/reports/accept-task*.md` for the reopened ones;
+  a task DONE without a report is named as such (docs-only tasks are expected there).
+- **Deviations:** `ls …/reports/deviations-*.md 2>/dev/null | wc -l` and `cat … | wc -l`.
 
 ## 8. Shutdown Team
 

@@ -58,7 +58,8 @@ drifts, and the tools vanish on model change.
 ```markdown
 # Plan — feature-{name}
 
-Status values: TODO → IN_PROGRESS(coder-N) → IN_REVIEW(coder-N) → DONE. Only Lead edits this file.
+Status values: TODO → IN_PROGRESS(coder-N) → IN_REVIEW(coder-N) → ACCEPTING(coder-N) → DONE,
+with REOPENED(coder-M) when the acceptance checker fails a task once. Only Lead edits this file.
 
 ## Task 1: Add settings API endpoint
 Status: TODO
@@ -78,8 +79,9 @@ Feature DoD applies — see VERIFICATION_PLAN.md
 - **Who writes:** Lead, and only Lead. Tech Lead (MEDIUM) and the architects (COMPLEX, Phase 1
   only) read it and send their changes — acceptance criteria, risk notes, new tasks — to Lead in
   their answers; Lead writes them in. Coders never edit it.
-- **Status is in this file.** Lead sets `IN_PROGRESS(coder-N)` before the spawn, `IN_REVIEW` and
-  `DONE` from the coder's messages. state.md keeps the roster, rotations and escalations, not task
+- **Status is in this file.** Lead sets `IN_PROGRESS(coder-N)` before the spawn, `IN_REVIEW` from
+  the coder's message, `ACCEPTING` on its DONE, and `DONE` only from the acceptance checker's PASS
+  (`phase2-monitoring.md`, "Accepting a DONE"). state.md keeps the roster, rotations and escalations, not task
   statuses — one store for each thing.
 - **Assignment is explicit.** Lead copies the task section verbatim into the coder's spawn prompt.
   Coders do not claim tasks; one coder, one task, then it stands down.

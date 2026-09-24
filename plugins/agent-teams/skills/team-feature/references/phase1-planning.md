@@ -302,7 +302,8 @@ Write(".claude/teams/{team-name}/PLAN.md"):
 
 # Plan — feature-{short-name}
 
-Status values: TODO → IN_PROGRESS(coder-N) → IN_REVIEW(coder-N) → DONE. Only Lead edits this file.
+Status values: TODO → IN_PROGRESS(coder-N) → IN_REVIEW(coder-N) → ACCEPTING(coder-N) → DONE
+(REOPENED(coder-M) after one failed acceptance). Only Lead edits this file.
 
 ## Task 1: Add settings API endpoint
 Status: TODO
@@ -312,9 +313,16 @@ Reference files (read for patterns): src/server/routers/profile.ts, src/server/r
 
 Description: Create GET/PUT /api/settings endpoint.
 
-Acceptance criteria:
-- GET returns current user settings
-- PUT updates settings with validation
+Contract (the task's contract — what the acceptance checker and the coder both hold to):
+- Working root: src/server (paths above are relative to the repository root)
+- Out of scope: the settings UI, the migration that adds the column — other tasks
+- Pitfalls: the router is mounted twice in tests (see tests/setup.ts); do not add a second Zod schema for User
+- Handover: .claude/teams/{team-name}/reports/handover-task1.md (≤10 lines, only what the next coder cannot get elsewhere)
+
+Acceptance criteria (each one checkable — a command with its expected output, or a fact about a file):
+- `pnpm vitest run src/server/routers/settings.test.ts` — all green, the file covers GET and PUT
+- GET returns current user settings (`grep -n "getSettings" src/server/routers/settings.ts`)
+- PUT updates settings with validation (a Zod schema on the input, `grep -n "z.object" …`)
 - Follow the same tRPC router pattern as profile.ts
 
 Convention checks (MUST PASS before requesting review):
@@ -337,7 +345,13 @@ Feature DoD applies — see VERIFICATION_PLAN.md
 - Status and Blocked by
 - Files to create/edit
 - Reference files (from researcher findings — existing files showing the pattern to follow)
-- Acceptance criteria
+- **Contract** — working root, out of scope, pitfalls, handover path. Out of scope is what the
+  coder must not touch even when it looks adjacent; pitfalls are what the researchers and the risk
+  testers found that a coder would otherwise learn the hard way
+- **Acceptance criteria — checkable ones.** Each criterion is a command with its expected output
+  or a fact about a file, because a one-shot acceptance checker verifies them against the diff in
+  Phase 2 before Lead marks the task DONE (`phase2-monitoring.md`, "Accepting a DONE"). "Works
+  correctly" is not a criterion; "`pnpm vitest run x.test.ts` green, 4 tests" is
 - **Convention checks** — specific pass/fail rules for THIS task (naming, structure, imports)
 - Tooling commands (from researcher findings)
 
@@ -808,8 +822,12 @@ a card made while Lead still composes prompts ages for nothing):
 ```bash
 mkdir -p .claude/teams/{team-name}/mail/lead
 python3 {plugin}/scripts/run-state.py new .claude/teams/{team-name} coder-{N} role=coder task={id} \
-    files={comma-separated "Files to create/edit" of the task} checkAfterSec={300 if the task is RISK/SENSITIVE-marked, else 900}
+    files={comma-separated "Files to create/edit" of the task} checkAfterSec={300 if the task is RISK/SENSITIVE-marked, else 900} \
+    nonGoals="{the task's Out of scope line}"
 ```
+
+The card carries the contract's out-of-scope line so a finisher or an acceptance checker reads it
+without opening PLAN.md; the acceptance criteria stay in PLAN.md, which the checker reads whole.
 
 The reviewer gets its card the same way (`role=reviewer`, no task — `new` makes it `idle`, so
 the first-minute check leaves a role that waits for its first request alone; tech-lead likewise).
@@ -945,7 +963,7 @@ Your role: listen for DONE/STUCK/ESCALATE; deliver QUEUED copies once the recipi
 - DO NOT read code, run checks, pick reviewers, or edit messages you deliver — coders drive their own review loop
 - Update this file after each event
 - Print a progress feed line to chat for each event — task digests, decisions, stuck reports (see phase2-monitoring.md event table). The user is watching the run live.
-- On DONE: mark the task DONE in PLAN.md, then spawn a coder for every task that just became available
+- On a coder's DONE: set the task to ACCEPTING, write the diff of its commits to engine/accept-task{id}.diff and spawn the acceptance checker (phase2-monitoring.md, "Accepting a DONE"); on its PASS mark the task DONE in PLAN.md, then spawn a coder for every task that just became available; on FAIL reopen once with a fresh coder
 - When every coding task in PLAN.md is DONE (the conventions task is not a coding task) → change Phase to VERIFICATION and follow Phase 3 instructions below
 
 ## Phase 3 Instructions (VERIFICATION) — follow step by step when Phase changes
