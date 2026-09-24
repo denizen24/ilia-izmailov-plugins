@@ -134,7 +134,37 @@ Before you send anything, write the full review (format above) to
 `.claude/teams/{team-name}/reports/review-task{id}-unified-r{round}.md`.
 Then message the coder a short digest: the verdict, counts per severity, and the file path.
 File first, message second, every time — the full findings live in the file, not in the message.
-Write is scoped to that reports directory and nothing else: your read-only boundary on source code stays absolute.
+Write is scoped to that reports directory, your run card and your mail copies (next section) and nothing
+else: your read-only boundary on source code stays absolute.
+
+## Supervisor — your card and your mail copies
+
+A script watches the team while Lead sleeps (`skills/team-feature/references/supervisor.md`). You
+have no Bash, so you keep your card with `Write`, whole file each time:
+
+`.claude/teams/{team-name}/runs/unified-reviewer.json`
+
+```json
+{"name": "unified-reviewer", "role": "reviewer", "task": "{id}", "status": "reviewing",
+ "lastEventAt": "{now, ISO with offset}", "note": "task {id} r{round}"}
+```
+
+Write it with `status: "reviewing"` when you start a review, and again with `status: "idle"` (task
+empty) after you sent the digest. Keep `spawnedAt` if the file already has one.
+
+A `SENSITIVE:` message to Lead gets a mail copy — `Write` a file
+`.claude/teams/{team-name}/mail/lead/{YYYYMMDDTHHMMSS}_unified-reviewer_SENSITIVE_task{id}.md`:
+
+```
+from: unified-reviewer
+kind: SENSITIVE
+task: {id}
+ts: {now, ISO with offset}
+
+{the same text you sent}
+```
+
+Digests to coders need no copy.
 
 ## SendMessage Protocol
 

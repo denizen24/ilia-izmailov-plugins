@@ -384,6 +384,22 @@ ready `resume` command for each session.
 Full spec — role registry, config schema, CLI presets, failure handling:
 `skills/team-feature/references/engines.md`.
 
+## Supervisor loop — Lead sleeps for free
+
+Waiting is the most expensive thing Lead does: every "let me check" turn costs its whole context. In
+this fork a script waits instead (`skills/team-feature/references/supervisor.md`, in Russian):
+
+- `scripts/supervisor-tick.py <run-dir>` — one pass over the run files, no model: teammates' cards
+  (`runs/*.json`), their letter copies (`mail/lead/`), `pending.log`, the engine markers. Prints
+  actions with priorities P0–P4 and keeps `state/supervisor.json`.
+- `scripts/supervisor-wait.sh <run-dir>` — ticks every 20 s and returns only when a P1+ action waits
+  (a DONE to accept, a question, a STUCK, a dead or unread engine, a teammate silent since spawn).
+  Lead runs it in the background, ends its turn, and is woken by its return.
+- `scripts/run-state.py` / `scripts/team-mail.sh` — how teammates keep their card and drop a copy of
+  each letter to Lead. Roles without Bash write the same files with `Write`.
+
+Tests: `python3 -m unittest discover -s scripts/tests` from `plugins/agent-teams`.
+
 ## Structure
 
 ```

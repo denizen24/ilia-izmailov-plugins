@@ -800,6 +800,18 @@ The reviewer starts narrow (~90k) and stays narrow, which is the entire point of
 **Record the base commit first:** run `git rev-parse HEAD` and write it into state.md as
 `## Base Commit` — Phase 3 diffs the whole feature against it.
 
+**Supervisor files before every spawn** (`references/supervisor.md`). Create the run card and
+make sure the mailbox exists — one Bash call per teammate, before its `Task(...)`:
+
+```bash
+mkdir -p .claude/teams/{team-name}/mail/lead
+python3 {plugin}/scripts/run-state.py new .claude/teams/{team-name} coder-{N} role=coder task={id} \
+    files={comma-separated "Files to create/edit" of the task} checkAfterSec={300 if the task is RISK/SENSITIVE-marked, else 900}
+```
+
+The reviewer gets its card the same way (`role=reviewer`, no task). After the spawn the card
+belongs to the teammate — Lead never edits `runs/` or `mail/` again.
+
 **One coder = one task, handed over by Lead.** A task is *available* when its Status is TODO and
 everything in its "Blocked by" is DONE (the conventions task never is — it waits for Phase 3). Spawn one coder per available task, up to --coders
 (default 5). Before each spawn, set that task's Status in PLAN.md to `IN_PROGRESS(coder-N)` — the
@@ -850,6 +862,14 @@ Handover notes from the tasks yours depends on: .claude/teams/{team-name}/report
 --- GOLD STANDARD EXAMPLES ---
 {GOLD STANDARD BLOCK compiled by Lead in Step 3}
 --- END GOLD STANDARDS ---
+
+--- SUPERVISOR (see "Supervisor" in your agent file) ---
+RUN DIR: .claude/teams/{team-name}
+YOUR CARD: .claude/teams/{team-name}/runs/coder-{N}.json — update it with
+  python3 {plugin}/scripts/run-state.py set .claude/teams/{team-name} coder-{N} status=<in_review|fixing|done|stuck> [note=...]
+MAIL COPY of every message you send to Lead:
+  {plugin}/scripts/team-mail.sh .claude/teams/{team-name} lead coder-{N} <DONE|STUCK|QUESTION|ESCALATION|QUEUED|IN_REVIEW> task {id} -- "<the same text>"
+--- END SUPERVISOR ---
 
 Start working on your task."
 )
@@ -915,7 +935,10 @@ If you lost context after compaction, read this file, PLAN.md (task statuses) an
 
 ## Phase 2 Instructions (EXECUTION)
 Your role: listen for DONE/STUCK/ESCALATE; deliver QUEUED copies once the recipient is idle (pending.log, references/team-runtime.md §3).
-- Before ending a turn while work is unfinished and no teammate is running: idle check (team-runtime.md §3)
+- Waiting is the supervisor loop's job (references/supervisor.md): after every handled wake, start
+  `bash {plugin}/scripts/supervisor-wait.sh .claude/teams/{team-name} --root {repo root}` in the background and end the turn.
+  On a wake, act on the printed actions by priority; `ack` answered letters; never poll by hand.
+- Before ending a turn while work is unfinished and no teammate is running: idle check (team-runtime.md §3) — with the loop running, the loop IS the check
 - DO NOT read code, run checks, pick reviewers, or edit messages you deliver — coders drive their own review loop
 - Update this file after each event
 - Print a progress feed line to chat for each event — task digests, decisions, stuck reports (see phase2-monitoring.md event table). The user is watching the run live.
@@ -931,6 +954,11 @@ Coders still run in Phase 3 (conventions, fixes, cleanup): keep delivering QUEUE
 4. Integrated verification — spawn ci-verifier + browser-verifier + spec-verifier in parallel, fix-verify loop for FAIL items (max 3 iterations), save VERIFICATION_REPORT.md
 5. Legacy cleanup — read LEGACY_REPORT.md + Explore scan, AskUserQuestion Delete/Keep/Later per item, cleanup tasks or .legacy-todo.md
 6. Summary & shutdown — final report, stop any teammate still running (no team to delete), present Human Checks via AskUserQuestion
+
+## Supervisor
+- loop: bash {plugin}/scripts/supervisor-wait.sh .claude/teams/{team-name} --root {repo root}   (background, restart after every wake)
+- tick: python3 {plugin}/scripts/supervisor-tick.py .claude/teams/{team-name}   (run once on any wake not caused by the loop)
+- last wake: {HH:MM — reason}
 
 ## Engines
 {Omit this whole section if no config file exists — the default is Claude everywhere.}
@@ -950,6 +978,20 @@ Statuses live in PLAN.md (same directory) — the single task list. Do not copy 
 
 ## Active Coders: {N} (max: {M})
 ```
+
+### 4b. Start the supervisor loop and end the turn
+
+With everyone spawned and state.md written, hand the waiting to the script
+(`references/supervisor.md`):
+
+```
+Bash(run_in_background=true):
+  bash {plugin}/scripts/supervisor-wait.sh .claude/teams/{team-name} --root {repository root}
+```
+
+Then end your turn. The loop returns — and wakes you — when a teammate's DONE, STUCK, question or
+a dead engine needs you; until then waiting costs nothing. Every wake ends the same way: handle
+the listed actions, start the loop again, end the turn.
 
 ### 5. 📢 Team Assembled
 

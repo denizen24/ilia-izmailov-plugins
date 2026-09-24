@@ -221,6 +221,14 @@ ENGINE RUNNING: {role} on {engine}, started {HH:MM}
   done marker: .claude/teams/{team-name}/engine/{role}/{NNN}.out.done
 ```
 
+**Card and mail copies (supervisor).** Right after the `ENGINE RUNNING` message:
+`python3 {plugin}/scripts/run-state.py set {run dir} {role} status=running note="engine {NNN}, done marker {path}"`.
+When you relay a reply, `status=in_review` / `fixing` / `done` as a Claude coder would
+(`agents/coder.md`, "Supervisor"); `ENGINE_DOWN` → `status=stuck` plus a mail copy
+(`team-mail.sh {run dir} lead {role} ENGINE_DOWN task {id} -- "<text>"`). The paths are in the
+`SUPERVISOR` block of your prompt. The supervisor also reads the engine markers itself — a dead
+worker or an unread result is caught even if you never write a line.
+
 ### Session id and ledger — the script's job
 
 `session.txt` is written by the script: from the `session_id` field of Cursor's JSON reply, from the

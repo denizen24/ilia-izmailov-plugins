@@ -193,6 +193,7 @@ Execute these steps in order:
 **Lead's role is MINIMAL in coordination — but not silent.** Coders drive their own review loop with the reviewer (and tech-lead for escalations on MEDIUM); they message each other directly, and Lead delivers only `QUEUED` copies. Lead only:
 
 - Delivers every `QUEUED:` copy once its recipient is idle, and runs the idle check before going idle with work unfinished (`references/team-runtime.md` §3)
+- **Sleeps on the supervisor loop** (`references/supervisor.md`): after the spawn and after every handled wake, `scripts/supervisor-wait.sh` runs in the background and Lead ends its turn; the loop wakes Lead only when a DONE, a question, a STUCK, a dead engine or a silent teammate needs it — no waiting turns
 
 - Prints a progress feed line for every meaningful event (see Progress Feed table in `phase2-monitoring.md`)
 - Tracks progress: task statuses in PLAN.md; roster, rotations and escalations in state.md
@@ -273,6 +274,9 @@ Per-run artifacts live in `.claude/teams/{team-name}/`:
 |-----------|-----------------|-----------|
 | `reports/` | Review findings, architect debate rounds, researcher / risk / verifier reports | Reviewers, architects, Lead |
 | `engine/` | Prompts, session ids and raw output of external CLI runs | Proxy teammates, Lead |
+| `runs/` | One card per teammate (`runs/<name>.json`): role, task, status, time of its last event, watch interval | Lead creates it at spawn (`scripts/run-state.py new`); the teammate updates it (`run-state.py set` or Write) |
+| `mail/` | Letter copies, one file each (`mail/<to>/<ts>_<from>_<KIND>.md`); `mail/lead/` is what the supervisor reads | Teammates (`scripts/team-mail.sh` or Write) |
+| `state/` | `supervisor.json` (the tick's snapshot and memory), `acked.log` (letters Lead answered) | `scripts/supervisor-tick.py`, Lead (`ack`) |
 | `ledger.jsonl` | One line per external engine run: role, task, session id, outcome. **The address of the engine's own recording** — Codex, Kimi, Grok and Cursor each keep the full conversation themselves, so this is what makes theirs findable and resumable. Rebuildable with `scripts/engine-sessions.py` | `scripts/run-engine.sh` (`launch`, `done`/`failed`); the caller adds `relayed`, `checks_done`, `committed` |
 | root | `PLAN.md` (the task list — Lead only), `state.md`, `pending.log` (copies flagged `QUEUED`), `DECISIONS.md`, `VERIFICATION_PLAN.md`, `VERIFICATION_REPORT.md`, `LEGACY_REPORT.md` | Lead, Tech Lead / Primary Architect |
 
@@ -294,6 +298,7 @@ Rules:
 ## Reference Files
 
 - `references/team-runtime.md`
+- `references/supervisor.md`
 - `references/phase1-planning.md`
 - `references/phase2-monitoring.md`
 - `references/engines.md`

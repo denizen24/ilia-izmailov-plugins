@@ -145,6 +145,9 @@ SendMessage(to="unified-reviewer", message="REVIEW: task #3. Files changed: src/
 ```
 If the result says `queued for delivery`, also send Lead: `QUEUED: unified-reviewer` + the same text.
 
+Right after the request: `run-state.py set … status=in_review` and a mail copy of the `IN_REVIEW`
+line to Lead (see "Supervisor" below) — that is how the supervisor knows you are waiting, not idle.
+
 **Then end your turn and wait for the review.** The verdict arrives from unified-reviewer and resumes you. Do not poll, and do not commit before it arrives.
 
 ### Step 6: Escalation protocol
@@ -165,6 +168,9 @@ If a gold standard pattern doesn't fit your specific case:
 **Review round limit:** If you've gone through 3+ review rounds on the same task (the reviewer keeps finding issues), escalate with a `REVIEW_LOOP` message summarizing the repeated issue (format and recipient in the Communication Protocol table).
 
 **Roster update:** If Lead sends a ROSTER UPDATE mid-review (the reviewer was replaced) and you are still waiting for a verdict, re-send your REVIEW request directly to the name in the update — with the same `queued` rule.
+
+When the verdict arrives: `run-state.py set … status=fixing note="r{N}: {counts}"` before you touch
+anything (a verdict is an event; the supervisor counts silence from the last one).
 
 After fixing all CRITICAL/MAJOR issues:
 - If fixes were **minor and mechanical** (exactly what reviewer asked) → proceed to commit
@@ -193,7 +199,10 @@ When the reviewer has approved and all CRITICAL/MAJOR issues are fixed:
    Only what the next coder cannot get from the task description, the gold standards or the code
    itself: dead ends you already tried, gotchas in this area, why an obvious approach does not work.
    Nothing that is already written down somewhere else. If there is genuinely nothing, write "none".
-6. **Send the DONE digest and stop.** Lead marks the task done in PLAN.md — never edit that file yourself. Do NOT ask for another task — your context now carries this whole
+6. **Card and mail copy:** `run-state.py set … status=done`, then the mail copy of the digest
+   (`team-mail.sh … lead coder-{N} DONE task {id} -- "<the digest>"`). The supervisor reads the copy;
+   Lead reads your SendMessage. Both, always — the copy is what survives a lost message.
+7. **Send the DONE digest and stop.** Lead marks the task done in PLAN.md — never edit that file yourself. Do NOT ask for another task — your context now carries this whole
    task and every review round of it, and none of that helps the next one. Lead will start a fresh
    coder, which is cheaper: a new coder pays once to load its role and its own files, while you would
    pay for this task's history on every remaining turn of the run.
@@ -211,6 +220,24 @@ EDGE CASES: {boundary cases your code explicitly handles — e.g. "empty setting
 ```
 
 Keep it to 4 lines. Do not list routine review nitpicks (naming, style) as notable findings — that's noise.
+
+## Supervisor — your card and your mail copies
+
+Your spawn prompt has a `SUPERVISOR` block with the run dir and two commands. A script, not Lead,
+watches the team while Lead sleeps (`skills/team-feature/references/supervisor.md`); it can only see
+what you write down:
+
+- **Your card** `runs/coder-{N}.json` — update the status at every step:
+  `python3 {plugin}/scripts/run-state.py set {run dir} coder-{N} status=<in_review|fixing|done|stuck> [note="..."]`.
+  Every `set` stamps the time; a card that stays unchanged for two intervals reads as a dead coder.
+- **A mail copy of every message you send to Lead** — the same text, right after the `SendMessage`:
+  `{plugin}/scripts/team-mail.sh {run dir} lead coder-{N} <KIND> task {id} -- "<text>"`,
+  KIND being the message's first word (`DONE`, `STUCK`, `QUESTION`, `ESCALATION`, `REVIEW_LOOP`,
+  `QUEUED`, `IN_REVIEW`). `STUCK` also sets `status=stuck`.
+- Messages to the reviewer or tech-lead need no copy.
+
+The copy is not a second message: nobody answers the file. It is what lets Lead recover after a
+compaction and what turns your silence into a fact instead of a guess.
 
 ## Communication Protocol
 

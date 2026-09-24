@@ -188,6 +188,12 @@ Then:
 This check costs nothing on a healthy run: a team with a message in flight always has someone
 running, and a team where everyone is idle with work left has lost something.
 
+**With the supervisor loop running (`supervisor.md`) the loop is the check.** A background
+`supervisor-wait.sh` is "someone running": Lead ends its turn on it, and the loop wakes Lead with
+`deliver_pending`, `silent_too_long` or `first_minute_silent` when the situations above arise —
+the same steps, established from files instead of from a round of `STATUS?`. Run the manual check
+only when no loop is running (it died with the session, or the scripts are unavailable).
+
 ## 4. Ending the run
 
 There is no team to delete. At shutdown:

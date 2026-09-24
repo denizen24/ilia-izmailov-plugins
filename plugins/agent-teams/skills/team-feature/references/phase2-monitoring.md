@@ -6,6 +6,22 @@ Coders drive the review loop with the reviewer (and, on MEDIUM, tech-lead for es
 
 Feed rules: user's language, product terms, one entry per event, always include the progress counter `{done}/{total}` on task events. See "Progress Feed" in SKILL.md.
 
+## Sleep and Wake — the Supervisor Loop
+
+Full protocol: `references/supervisor.md`. In short: Lead never waits in its own turn. After the
+spawn and after every handled wake it starts `scripts/supervisor-wait.sh` in the background and ends
+the turn; the script runs `scripts/supervisor-tick.py` every 20 s over the run files — teammates'
+cards in `runs/`, their letter copies in `mail/lead/`, `pending.log`, the engine markers — and
+returns, waking Lead, only when something of priority P1 or higher is waiting: a DONE not yet
+accepted in PLAN.md, a question, a STUCK, a dead or unread engine, an undelivered `QUEUED` copy, a
+teammate silent since its spawn. The printed action list is what Lead reads; the event table
+below says what to do with each event, `supervisor.md` maps every action kind onto it.
+
+On a wake that came from a letter or a completion notification rather than from the loop, run the
+tick once first (`python3 {plugin}/scripts/supervisor-tick.py .claude/teams/{team-name}`) — it lists
+everything that accumulated, not just the one message. Letters closed by an answer get
+`supervisor-tick.py ack …`; a DONE is closed by its status in PLAN.md.
+
 ## Event Handling
 
 | Event from team member | Action | 📢 Print to chat |
@@ -56,7 +72,7 @@ After every event, update the run files:
 
 ## Compaction Recovery
 
-If context feels incomplete or current state is unclear: read `.claude/teams/{team-name}/state.md`, `PLAN.md` and `pending.log` (deliver every `OPEN` line) — together they are self-describing (the **Phase** field in state.md tells which phase instructions to follow step by step; roster and exact commands are in state.md, task statuses in PLAN.md). Honor its `## Engines` section for later spawns — do NOT re-read `~/.claude/agent-teams.json` and do NOT re-probe the CLIs; if the section is absent, every role is Claude. A `## Second opinions` section, if there is one, lists the second opinions that were in flight: nothing in a restored context tells you whether those findings already reached the reviewer, so treat each line per "When a Second Opinion Does Not Come" at once — including a line stamped `spawned` two minutes ago. Its marker check is what tells a still-running engine (wait on its `.done`) from a finished one nobody relayed (deliver it) and from a dead one (cancel); a `claude` instance has no marker and counts as expired, because an unseen park costs the run while a cancel costs one optional opinion. Every other engine role: run `{launcher} --status` for it before relaunching anything — a `DONE-UNREAD` call is a reply that survived the compaction or restart and is read, not paid for again.
+If context feels incomplete or current state is unclear: run one supervisor tick (`python3 {plugin}/scripts/supervisor-tick.py .claude/teams/{team-name}` — it rebuilds "who is where" from the run cards and letter copies), then read `.claude/teams/{team-name}/state.md`, `PLAN.md` and `pending.log` (deliver every `OPEN` line) — together they are self-describing (the **Phase** field in state.md tells which phase instructions to follow step by step; roster and exact commands are in state.md, task statuses in PLAN.md). Honor its `## Engines` section for later spawns — do NOT re-read `~/.claude/agent-teams.json` and do NOT re-probe the CLIs; if the section is absent, every role is Claude. A `## Second opinions` section, if there is one, lists the second opinions that were in flight: nothing in a restored context tells you whether those findings already reached the reviewer, so treat each line per "When a Second Opinion Does Not Come" at once — including a line stamped `spawned` two minutes ago. Its marker check is what tells a still-running engine (wait on its `.done`) from a finished one nobody relayed (deliver it) and from a dead one (cancel); a `claude` instance has no marker and counts as expired, because an unseen park costs the run while a cancel costs one optional opinion. Every other engine role: run `{launcher} --status` for it before relaunching anything — a `DONE-UNREAD` call is a reply that survived the compaction or restart and is read, not paid for again.
 
 ## When a Teammate Goes Quiet — Bounded Wait
 
@@ -67,9 +83,11 @@ rule about never touching code, and paying for it in the most expensive context 
 **For a healthy task this section costs nothing.** The coder's DONE wakes you; you never check. What
 follows runs only on suspicion.
 
-**Never poll on a timer.** Do not schedule wakeups to ask "is it done yet" — each one is a full turn
+**Never poll on a timer — with the model.** Do not schedule wakeups to ask "is it done yet" — each one is a full turn
 at your context size, and in a real run forty of them bought nothing. You are woken by messages;
-suspicion is what a check needs, not a clock.
+suspicion is what a check needs, not a clock. The supervisor loop (`supervisor.md`) is not the
+model polling: it is `sleep` and a file scan, and it wakes you with the facts below already
+established (`engine_dead`, `engine_result_unread`, `silent_too_long`).
 
 ### The check (one Bash call, at most three times, ≥15 minutes apart)
 
