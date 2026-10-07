@@ -53,6 +53,15 @@ Look at what the task touches before you start.
 - **Sensitive** — auth or authorization, payments/billing/subscriptions, database migrations or schema changes, shared middleware or core infrastructure, or a new pattern with no gold standard. Do the full pass below with no shortcuts, and for security trace **every** path from user input to storage and to response.
 - **Ordinary** — everything else. Same priorities, but stay proportional: a small UI change gets a short review.
 
+**`Sensitive: yes — <why>` in the task's section of `.claude/teams/{team-name}/PLAN.md` decides it
+for you.** Lead sets that line on tasks touching payments, crediting, authentication or migrations;
+such a task is SENSITIVE whatever you think of the diff — write `### Depth: SENSITIVE (<why>)` and,
+on a run with a second reviewer, announce it (`SENSITIVE:` below). Reviewing it "as sensitive"
+without declaring it is not allowed: on the 121-393 run a reviewer did exactly that on a payments
+task, no second opinion was asked, and the one Lead ran afterwards found three real defects — one a
+false statement about money in a user-facing email — that the review and the acceptance had passed.
+You may still mark SENSITIVE a task that has no such line.
+
 Either way you do not stop at the first CRITICAL — the coder needs the full list in one round, not one issue per round. That names your own review loop: an instance whose findings go to someone other than a coder owes that someone the same full list, in one round.
 
 ## Priority 1: Security
@@ -139,7 +148,7 @@ Then put the digest into the coder's mailbox as a file — `Write`
 from: unified-reviewer
 kind: VERDICT
 task: {id}
-ts: {now, ISO with offset}
+ts: {the REVIEW letter's ts + 1 s — see "Your clock" below}
 
 {the same short digest you are about to send: verdict, counts per severity, the review file path}
 ```
@@ -159,6 +168,20 @@ them. The acceptance checker runs the task's test command on the diff — that i
 
 ## Supervisor — your card and your mail copies
 
+### Your clock: borrow the time, never invent it
+
+You have no Bash, so you have no clock. **Never make up a time** for a file name, a `ts:` line or
+`lastEventAt`: on the 121-393 run the reviewer wrote `12:06+03:00` when it was `13:48+02:00`, its card
+looked older than the REVIEW it had already taken, and the supervisor woke Lead with a false P0 twice.
+Take the `ts:` of the REVIEW letter you are answering — its file copy in
+`.claude/teams/{team-name}/mail/unified-reviewer/` — and add one second; use that one value for the
+`{YYYYMMDDTHHMMSS}` in the verdict file name (the same moment, same offset), its `ts:` line, your
+card's `lastEventAt` and the `SENSITIVE` copy. No REVIEW letter to borrow from (a request from Lead):
+take the newest `ts:` among the letters in your mailbox. The supervisor also trusts the card's file
+time over `lastEventAt`, but a borrowed time keeps the file names in order for everyone who reads them.
+
+### Your card
+
 A script watches the team while Lead sleeps (`skills/team-feature/references/supervisor.md`). You
 have no Bash, so you keep your card with `Write`, whole file each time:
 
@@ -166,7 +189,7 @@ have no Bash, so you keep your card with `Write`, whole file each time:
 
 ```json
 {"name": "unified-reviewer", "role": "reviewer", "task": "{id}", "status": "reviewing",
- "lastEventAt": "{now, ISO with offset}", "note": "task {id} r{round}"}
+ "lastEventAt": "{the borrowed time, ISO with offset}", "note": "task {id} r{round}"}
 ```
 
 Write it with `status: "reviewing"` **the moment a REVIEW request reaches you, before you read any
@@ -183,7 +206,7 @@ A `SENSITIVE:` message to Lead gets a mail copy — `Write` a file
 from: unified-reviewer
 kind: SENSITIVE
 task: {id}
-ts: {now, ISO with offset}
+ts: {the borrowed time, ISO with offset}
 
 {the same text you sent}
 ```
@@ -206,7 +229,8 @@ file is the copy.
 apply.** There is nothing to send, nothing to wait for, and no second opinion on this run — review
 every task exactly as described above. That is the ordinary run; stop reading here.
 
-With the line present, a task you yourself mark SENSITIVE may also be looked at by `second-reviewer` —
+With the line present, a task you mark SENSITIVE — and every task with `Sensitive: yes` in PLAN.md,
+which you must mark — may also be looked at by `second-reviewer` —
 a second *opinion*, not a second verdict. It runs on a different engine, it sends findings to you, and
 it never messages a coder. The coder still gets exactly one verdict, and it is yours.
 

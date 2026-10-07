@@ -397,7 +397,7 @@ this fork a script waits instead (`skills/team-feature/references/supervisor.md`
   Lead runs it in the background, ends its turn, and is woken by its return.
 - `scripts/run-state.py` / `scripts/team-mail.sh` — how teammates keep their card and drop a copy of
   each letter to Lead. Roles without Bash write the same files with `Write`.
-- `scripts/team-wait.sh <run-dir> <name> --kind VERDICT --task <id>` — a teammate waits in the
+- `scripts/team-wait.sh <run-dir> <name> --kind VERDICT|ANSWER --task <id>` — a teammate waits in the
   background for a letter in its own mailbox and is resumed when it lands.
 
 Measured on a real MEDIUM run (2026-09-24, 121-299): Lead's input tokens per wake fell from 2.18M
@@ -427,6 +427,20 @@ failed a task for it) and gets the approved deviations from DECISIONS.md; PLAN.m
 engine's result; a teammate that stamped `startedAt` has no first-minute alarm; run and root paths
 are made absolute; a feature built from a mockup gets `## Visual Checks` in Phase 3; follow-up fixes
 are classified on their own (almost always SIMPLE).
+
+**0.17.0 — fewer false alarms, and money is always SENSITIVE.** From the first live run of 0.16.0
+(121-393, 13 coders): no message was really lost, but the tick woke Lead for nothing four times.
+Now `undelivered_mail` takes the card's file time when it is later than `lastEventAt` (the reviewer
+without Bash had invented an old time), and `silent_too_long` drops to P3 `busy: <cmd>` while a
+pytest / jest / yarn / npm / craco started inside the window runs under `--root`. Lead's answer to a
+QUESTION / ESCALATION / STUCK is an `ANSWER` file before the message, and a coder whose question came
+back `queued` waits on it with `team-wait.sh --kind ANSWER`; before a RESEND Lead checks
+`ListAgents` (on 2.1.280 a `queued` message resumes its recipient after its turn ends). The reviewer
+borrows its time from the REVIEW letter instead of inventing one; a task with
+`Sensitive: yes — <why>` in PLAN.md (payments, crediting, auth, migrations) must be declared
+SENSITIVE, so the second opinion is asked — on that run it found three real defects in a payments
+task the review had passed. A coder proxy commits only after the verdict and waits on it in the
+background.
 
 Tests: `python3 -m unittest discover -s scripts/tests` from `plugins/agent-teams`.
 

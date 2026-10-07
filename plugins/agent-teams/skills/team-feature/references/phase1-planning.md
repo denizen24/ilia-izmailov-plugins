@@ -312,6 +312,7 @@ Status: TODO
 Blocked by: none
 Files to create/edit: src/server/routers/settings.ts
 Reference files (read for patterns): src/server/routers/profile.ts, src/server/routers/account.ts
+Sensitive: {only on a task touching payments, crediting, authentication or migrations — `yes — <why>`; otherwise omit the line}
 
 Description: Create GET/PUT /api/settings endpoint.
 
@@ -347,6 +348,12 @@ Feature DoD applies — see VERIFICATION_PLAN.md
 - Status and Blocked by
 - Files to create/edit
 - Reference files (from researcher findings — existing files showing the pattern to follow)
+- **`Sensitive: yes — <why>`** on every task that touches payments or billing, crediting of balances
+  or tokens, authentication or authorization, or a database migration. It is Lead's call, made here
+  from the file list, not the reviewer's: the reviewer must declare such a task SENSITIVE and ask
+  for the second opinion when the run has one (`agents/unified-reviewer.md`). On the 121-393 run a
+  payments task without the line was reviewed "as sensitive" silently; the second opinion Lead ran
+  afterwards found three real defects. The coder's card gets `checkAfterSec=300` for it, too
 - **Contract** — working root, out of scope, pitfalls, handover path. Out of scope is what the
   coder must not touch even when it looks adjacent; pitfalls are what the researchers and the risk
   testers found that a coder would otherwise learn the hard way
@@ -896,6 +903,8 @@ REVIEW COPY for the reviewer's mailbox, right after each REVIEW request:
   {plugin}/scripts/team-mail.sh .claude/teams/{team-name} unified-reviewer coder-{N} REVIEW task {id} -- "<the same text>"
 VERDICT WAITER, in the background (run_in_background: true), right after each REVIEW request:
   {plugin}/scripts/team-wait.sh .claude/teams/{team-name} coder-{N} --kind VERDICT --task {id}
+ANSWER WAITER, in the background, when a QUESTION / ESCALATION / STUCK comes back `queued`:
+  {plugin}/scripts/team-wait.sh .claude/teams/{team-name} coder-{N} --kind ANSWER --task {id}
 --- END SUPERVISOR ---
 
 Start working on your task."

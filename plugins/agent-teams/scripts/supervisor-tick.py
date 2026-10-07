@@ -27,7 +27,8 @@
       письмо ведущему без ответа (QUESTION / ESCALATION / SENSITIVE / QUEUED);
       первая минута: участник молчит уже 3 минуты (один раз)
   P2  первая минута: старт старше 60 с, а признаков жизни нет (один раз)
-  P3  контрольная точка: с последнего события прошёл интервал участника
+  P3  контрольная точка: с последнего события прошёл интервал участника; busy — молчит
+      дольше двух интервалов, но под корнем идут тесты/сборка
   P4  всё тихо
 
 Первая минута ловит спавн, который так и не начал работать. Участник, сам
@@ -41,9 +42,19 @@
 «Правки в файлах задачи» — файлы с mtime внутри окна, а не `git status`: правка,
 сделанная час назад и не закоммиченная, участника живым не делает.
 
+Занятой участник: кодер может минутами гонять тяжёлый набор тестов, не трогая файлы
+задачи (прогон 121-393: денежный pytest 5–6 минут — дважды ложный P0, и цикл тут же
+будил ведущего снова). Если под корнем репозитория (cwd процесса из /proc) идёт
+pytest / jest / yarn / npm / craco моложе окна молчания, `silent_too_long` понижается
+до P3 `busy` с командой процесса. Процесс старше окна — вероятно, зависший, — не
+спасает. Нет /proc (не Linux) — правило работает как раньше.
+
 Письма участникам (mail/<имя>/, не lead): вердикт рецензента кодеру, REVIEW кодера
 рецензенту. Письмо доставлено, если адресат отметил его в mail/<имя>/.seen
-(`team-wait.sh`) или после письма обновил свою карточку (lastEventAt новее письма).
+(`team-wait.sh`) или после письма обновил свою карточку. Время карточки — позднее из
+lastEventAt и mtime файла runs/<имя>.json: роль без Bash пишет lastEventAt руками и
+может выдумать время (121-393: 12:06+03:00 при реальных 13:48+02:00 — дважды ложный
+P0), а mtime ставит файловая система.
 Иначе через две минуты — P0 undelivered_mail: SendMessage вернулся `queued` и
 потерялся, адресат стоит. Ведущий шлёт RESEND с текстом файла и делает `ack`.
 
@@ -249,6 +260,66 @@ def touched_since(root, files, since):
     return False
 
 
+BUSY_CMD = re.compile(r"^(pytest|py\.test|jest|yarn|npm|craco)(\.c?js)?$")
+
+
+def list_processes():
+    """Процессы машины из /proc: [{pid, cwd, argv, started}]. Нет /proc — пустой список.
+
+    Вынесено отдельно, чтобы тест мог подменить список процессов."""
+    proc = Path("/proc")
+    if not proc.is_dir():
+        return []
+    try:
+        btime = next(int(l.split()[1]) for l in (proc / "stat").read_text().splitlines() if l.startswith("btime "))
+        hz = os.sysconf("SC_CLK_TCK")
+    except (OSError, ValueError, StopIteration):
+        return []
+    out = []
+    for d in proc.iterdir():
+        if not d.name.isdigit():
+            continue
+        try:
+            argv = [a for a in (d / "cmdline").read_bytes().decode("utf-8", "replace").split("\0") if a]
+            cwd = os.readlink(d / "cwd")
+            stat = (d / "stat").read_text()
+            start_ticks = int(stat[stat.rindex(")") + 2:].split()[19])
+        except (OSError, ValueError, IndexError):
+            continue
+        if argv:
+            out.append({"pid": int(d.name), "cwd": cwd, "argv": argv,
+                        "started": datetime.fromtimestamp(btime + start_ticks / hz, tz=timezone.utc)})
+    return out
+
+
+def busy_command(root, now, window_sec):
+    """Тесты или сборка под корнем, начатые не раньше окна молчания: команда или None.
+
+    Учитывается cwd процесса внутри `root`; сам супервизор и его цикл — не в счёт."""
+    if not root:
+        return None
+    try:
+        base = Path(root).resolve()
+    except OSError:
+        return None
+    me = {os.getpid(), os.getppid()}
+    for p in list_processes():
+        argv = p.get("argv") or []
+        if p.get("pid") in me or any("supervisor-" in a for a in argv):
+            continue
+        cwd = Path(p.get("cwd") or "/")
+        if cwd != base and base not in cwd.parents:
+            continue
+        started = p.get("started")
+        if started is None or (now - started).total_seconds() > window_sec:
+            continue
+        hit = any(BUSY_CMD.match(Path(a).name) for a in argv[:4]) or \
+            any(a == "-m" and argv[i + 1:i + 2] == ["pytest"] for i, a in enumerate(argv))
+        if hit:
+            return " ".join(argv)[:120]
+    return None
+
+
 def tick(run_dir, root=None, now=None):
     run_dir = Path(run_dir).resolve()
     if not run_dir.is_dir():
@@ -298,6 +369,11 @@ def tick(run_dir, root=None, now=None):
         if str(card.get("status", "")) in ("done", "stopped"):
             continue   # адресат закончил: письмо ему уже не нужно, ротацию ведёт ведущий
         card_at = parse_ts(card.get("lastEventAt"))
+        try:   # роль без Bash ставит lastEventAt руками — mtime карточки честнее
+            card_mtime = datetime.fromtimestamp((run_dir / "runs" / f"{box}.json").stat().st_mtime, tz=timezone.utc)
+            card_at = max(card_at, card_mtime) if card_at else card_mtime
+        except OSError:
+            pass
         taken = seen(run_dir, box)
         for letter in read_mail(run_dir, box):
             if letter["file"] in taken or letter["file"] in done_ack:
@@ -330,6 +406,7 @@ def tick(run_dir, root=None, now=None):
 
     # ---- участники: первая минута, контрольные точки, молчание
     signals_from = {l["from"] for l in lead_mail}
+    busy = {}   # окно -> команда живого теста под корнем; считается по нужде, раз за тик
     for name, run in runs.items():
         status = str(run.get("status", "running"))
         if status in ("done", "stopped", "idle"):
@@ -366,8 +443,15 @@ def tick(run_dir, root=None, now=None):
         # молчание и контрольные точки — после первой минуты (живой или уже названный молчащим)
         if since is not None and firsts.get(name) in ("ok", "p1"):
             if since >= 2 * interval and not touched_since(root, files, now - timedelta(seconds=2 * interval)):
-                add("P0", "silent_too_long", run=name, detail=f"{since // 60} мин без событий и без правок в файлах задачи",
-                    ref=f"runs/{name}.json")
+                if 2 * interval not in busy:
+                    busy[2 * interval] = busy_command(root, now, 2 * interval)
+                cmd = busy[2 * interval]
+                if cmd:
+                    add("P3", "busy", run=name, detail=f"busy: {cmd} — {since // 60} мин без событий, но тесты/сборка идут",
+                        ref=f"runs/{name}.json")
+                else:
+                    add("P0", "silent_too_long", run=name, detail=f"{since // 60} мин без событий и без правок в файлах задачи",
+                        ref=f"runs/{name}.json")
             elif since >= interval:
                 fired = parse_ts(checkpoints.get(name))
                 if not fired or fired < last or (now - fired).total_seconds() >= interval:

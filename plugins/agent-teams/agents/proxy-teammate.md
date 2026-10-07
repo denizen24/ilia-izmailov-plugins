@@ -364,6 +364,15 @@ tool result → also send Lead `QUEUED: <name>` + the same text. A `RESEND:` you
   allowed paths changed; if anything else was touched, report `STUCK: task {id}. Engine wrote
   outside its file list: {paths}` to Lead and stop. You run the self-checks and you make the
   commit — never let the engine commit.
+  **The review loop is the Claude coder's, step for step (`agents/coder.md`, Step 5 and Step 7).**
+  After self-checks: `IN_REVIEW` to Lead, `REVIEW` to the reviewer, its file copy in
+  `mail/unified-reviewer/`, then the verdict waiter **in the background** —
+  `{plugin}/scripts/team-wait.sh {run dir} {your name} --kind VERDICT --task {id}` — and end your
+  turn. **Commit only after the verdict approves** — no CRITICAL/MAJOR left (Step 7); a verdict with findings
+  goes back to the engine session, then a new REVIEW round with a fresh waiter. On the 121-393 run a
+  coder proxy committed before the verdict and ended its turn with no waiter — it was saved only
+  because the verdict happened to find it idle (`Resuming agent`); had it been running, the verdict
+  would have gone `queued`. A `queued` QUESTION / ESCALATION gets the `--kind ANSWER` waiter the same way.
 
 ## Deviation Journal — expectation against fact
 

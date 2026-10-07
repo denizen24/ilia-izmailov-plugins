@@ -46,7 +46,12 @@ class Fixture:
         data = {"name": name, "role": "coder", "task": "3", "spawnedAt": iso(NOW - timedelta(minutes=5)),
                 "lastEventAt": iso(NOW - timedelta(minutes=4)), "status": "running", "files": [], "checkAfterSec": 900}
         data.update(fields)
-        (self.run / "runs" / f"{name}.json").write_text(json.dumps(data), encoding="utf-8")
+        card = self.run / "runs" / f"{name}.json"
+        card.write_text(json.dumps(data), encoding="utf-8")
+        # карточку пишут в момент события: mtime = lastEventAt, а не реальное «сейчас» теста
+        when = (st.parse_ts(data.get("lastEventAt")) or NOW).timestamp()
+        os.utime(card, (when, when))
+        return card
 
     def touch(self, rel, when):
         path = self.root / rel
@@ -251,6 +256,43 @@ class Checkpoints(unittest.TestCase):
                    files=["src/t3.py"])
         self.assertNotIn("silent_too_long", [k for _, k, _ in f.kinds()])
 
+    def _procs(self, procs):
+        saved = st.list_processes
+        st.list_processes = lambda: procs
+        self.addCleanup(setattr, st, "list_processes", saved)
+
+    def test_a_running_test_suite_under_root_downgrades_silence_to_busy(self):
+        # 121-393: кодер 5–6 минут гонял денежный pytest, правок файлов не было — дважды ложный P0
+        f = Fixture(self)
+        self._procs([{"pid": 4242, "cwd": str(f.root / "backend"), "argv": ["python3", "-m", "pytest", "tests/test_payments.py"],
+                      "started": NOW - timedelta(minutes=5)}])
+        f.run_card("coder-3", spawnedAt=iso(NOW - timedelta(minutes=60)), lastEventAt=iso(NOW - timedelta(minutes=31)))
+        acts = f.tick()["actions"]
+        self.assertEqual((acts[0]["priority"], acts[0]["kind"], acts[0]["run"]), ("P3", "busy", "coder-3"))
+        self.assertIn("busy: python3 -m pytest", acts[0]["detail"])
+
+    def test_a_test_run_older_than_the_window_does_not_save_a_silent_coder(self):
+        # зависший jest часовой давности — это и есть то, ради чего silent_too_long
+        f = Fixture(self)
+        self._procs([{"pid": 4242, "cwd": str(f.root), "argv": ["node", str(f.root / "node_modules/.bin/jest")],
+                      "started": NOW - timedelta(minutes=45)}])
+        f.run_card("coder-3", spawnedAt=iso(NOW - timedelta(minutes=60)), lastEventAt=iso(NOW - timedelta(minutes=31)))
+        self.assertEqual(f.kinds()[0], ("P0", "silent_too_long", "coder-3"))
+
+    def test_a_test_run_outside_root_or_the_supervisor_itself_does_not_count(self):
+        f = Fixture(self)
+        self._procs([{"pid": 4242, "cwd": "/elsewhere", "argv": ["yarn", "test"], "started": NOW - timedelta(minutes=2)},
+                     {"pid": 4243, "cwd": str(f.root), "argv": ["bash", "supervisor-wait.sh", "npm"],
+                      "started": NOW - timedelta(minutes=2)}])
+        f.run_card("coder-3", spawnedAt=iso(NOW - timedelta(minutes=60)), lastEventAt=iso(NOW - timedelta(minutes=31)))
+        self.assertEqual(f.kinds()[0], ("P0", "silent_too_long", "coder-3"))
+
+    def test_no_proc_means_the_old_rule(self):
+        f = Fixture(self)
+        self._procs([])
+        f.run_card("coder-3", spawnedAt=iso(NOW - timedelta(minutes=60)), lastEventAt=iso(NOW - timedelta(minutes=31)))
+        self.assertEqual(f.kinds()[0], ("P0", "silent_too_long", "coder-3"))
+
     def test_shorter_interval_for_a_sensitive_task(self):
         f = Fixture(self)
         f.run_card("coder-3", spawnedAt=iso(NOW - timedelta(minutes=20)), lastEventAt=iso(NOW - timedelta(minutes=6)),
@@ -348,6 +390,23 @@ class PeerMail(unittest.TestCase):
         self.letter(f, "unified-reviewer", "coder-3", "REVIEW", 4, "r.md")
         self.assertNotIn("undelivered_mail", [a[1] for a in f.kinds()])
 
+    def test_a_card_written_after_the_letter_counts_even_with_an_invented_last_event(self):
+        # 121-393: рецензент без Bash поставил lastEventAt 12:06+03:00 при реальных 13:48+02:00
+        f = Fixture(self)
+        card = f.run_card("unified-reviewer", role="reviewer", task="3", status="reviewing",
+                          lastEventAt=iso(NOW - timedelta(hours=2, minutes=40)))
+        fresh = (NOW - timedelta(minutes=1)).timestamp()
+        os.utime(card, (fresh, fresh))
+        self.letter(f, "unified-reviewer", "coder-3", "REVIEW", 4, "r.md")
+        self.assertNotIn("undelivered_mail", [a[1] for a in f.kinds()])
+
+    def test_a_card_untouched_since_before_the_letter_is_still_p0(self):
+        f = Fixture(self)
+        f.run_card("unified-reviewer", role="reviewer", task="3", status="reviewing",
+                   lastEventAt=iso(NOW - timedelta(minutes=10)))
+        self.letter(f, "unified-reviewer", "coder-3", "REVIEW", 4, "r.md")
+        self.assertIn(("P0", "undelivered_mail", "unified-reviewer"), f.kinds())
+
     def test_a_review_request_to_an_idle_reviewer_is_p0(self):
         f = Fixture(self)
         f.run_card("unified-reviewer", role="reviewer", task="", status="idle",
@@ -397,6 +456,13 @@ class TeamWait(unittest.TestCase):
         self.assertIn("APPROVED", out)
         self.assertIn("a.md", (f.run / "mail" / "coder-3" / ".seen").read_text(encoding="utf-8"))
         self.assertIn("TIMEOUT", self.wait(f, "--kind", "VERDICT", "--max", "1"))
+
+    def test_waits_for_a_lead_answer_too(self):
+        # 0.17.0: ответ ведущего на QUESTION/ESCALATION тоже файл, kind ANSWER
+        f = Fixture(self)
+        f.mail("coder-3", "lead", "ANSWER", "3", "use the existing helper", name="a.md")
+        out = self.wait(f, "--kind", "ANSWER", "--task", "3", "--max", "3")
+        self.assertIn("use the existing helper", out)
 
     def test_skips_other_tasks_and_kinds(self):
         f = Fixture(self)

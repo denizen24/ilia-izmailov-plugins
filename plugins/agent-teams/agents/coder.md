@@ -173,7 +173,19 @@ If a gold standard pattern doesn't fit your specific case:
 1. Do NOT silently deviate from the pattern
 2. Do NOT force-fit your code into a wrong pattern
 3. Send `ESCALATION: task {id}` (recipient per the Communication Protocol table — directly to tech-lead or to Lead), stating which pattern doesn't fit, why, and your proposed alternative
-4. End your turn and WAIT for the response before implementing
+4. End your turn and WAIT for the response before implementing (see "Waiting for an answer" below)
+
+### Waiting for an answer (QUESTION, ESCALATION, STUCK)
+
+Lead puts its answer to your `QUESTION` / `ESCALATION` / `STUCK` into your mailbox as a file
+(`kind: ANSWER`) *before* messaging you — the same way the reviewer does with a verdict. If your
+`SendMessage` came back `queued` (you also sent Lead the `QUEUED:` copy), start the answer waiter in
+the background (`run_in_background: true`) and end your turn:
+`{plugin}/scripts/team-wait.sh {run dir} coder-{N} --kind ANSWER --task {id}`.
+The answer resumes you as Lead's message or as the waiter's output, whichever comes first — the same
+answer; act on the first. On the 121-393 run a coder whose question came back `queued` ended its turn
+repeating the question, and Lead resent the answer by hand for nothing. `TIMEOUT` from the waiter:
+ask Lead again.
 
 ### Step 7: Process review feedback
 
@@ -258,7 +270,8 @@ what you write down:
   Every `set` stamps the time; a card that stays unchanged for two intervals, with no task file
   touched in that window, reads as a dead coder.
 - **Never end a turn with a background job as the only thing that would resume you** — except
-  `team-wait.sh`, which always finishes (a letter or its `--max`). Run
+  `team-wait.sh` (the `VERDICT` waiter after REVIEW, the `ANSWER` waiter after a `queued`
+  QUESTION / ESCALATION / STUCK), which always finishes (a letter or its `--max`). Run
   self-checks and the full test suite in the foreground with a timeout (`timeout 900 …`). A hung
   background test run does not resume you, and the supervisor cannot tell a sleeping coder from a
   thinking one — on 2026-09-24 that cost a run 45 minutes until Lead sent `STATUS?`.

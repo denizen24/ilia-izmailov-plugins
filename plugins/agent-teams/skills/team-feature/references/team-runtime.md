@@ -19,7 +19,7 @@ assumes these rules; when one of them seems to say otherwise, this file wins.
   |---|---|---|
   | finished its turn (idle) | `Resuming agent <name>` | **yes** — the recipient is woken with your message |
   | running, and it takes another tool round | `queued for delivery … at its next tool round` | yes, at that round |
-  | running, but it ends its turn without another tool round | `queued for delivery … at its next tool round` | **no** — it finishes without reading it |
+  | running, but it ends its turn without another tool round | `queued for delivery … at its next tool round` | measured 2026-10-07 on 2.1.280: delivered by resuming the recipient after its turn ends; earlier builds lost it |
 
   Measured 2026-09-18 on Claude Code 2.1.276 (terminal and bb, with and without
   `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS`, foreground and background agents): a message to an idle
@@ -31,6 +31,13 @@ assumes these rules; when one of them seems to say otherwise, this file wins.
   knowledge of which build or mode you are in: a sender that sees `queued` hands a copy to Lead.
   Row 3 is real in practice: on 2026-09-17 a reviewer busy with task #3 was sent task #2's request,
   answered #3, and ended its turn — the second request was never in its transcript.
+
+  Measured again 2026-10-07 on Claude Code 2.1.280 (VS Code extension, run 121-393): twice a Lead
+  answer came back `queued`, the coder ended its turn repeating the question in its hand-back — and
+  was then resumed by that same queued message (`ListAgents`: running). Both manual RESENDs were
+  redundant; real losses over the run: 0. The build you run may still lose it, so the copy-to-Lead
+  rule stays — but **before a RESEND, Lead checks `ListAgents`**: a recipient that is running after
+  its hand-back has the message; RESEND only when the recipient is idle and has not answered.
 
 Hence three rules: **no team lifecycle calls, the plan lives in a file, teammates message each
 other directly and hand Lead a copy whenever delivery is not confirmed.**
@@ -130,7 +137,9 @@ files a message points to.
 
 Then deliver it the moment `<name>` is idle — right away if it already is (its turn ended since the
 send: you got its completion notification, or `ListAgents` shows it idle), otherwise on its next
-completion notification:
+completion notification. **Check `ListAgents` first, even after a completion notification:** if
+`<name>` is running again after its hand-back, the queued message resumed it (2.1.280 does this) —
+mark the line `DELIVERED`, no RESEND. RESEND only when `<name>` is idle and its answer has not come:
 
 ```
 SendMessage(to="<name>", message="RESEND: from <sender>\n<the body, verbatim>")
@@ -146,6 +155,13 @@ sender `lead` and send it again on that teammate's next completion notification.
 altogether, send Lead's first instruction to a freshly spawned teammate only after its `READY` — every
 long-lived teammate (reviewer, tech-lead, architects) is spawned with "reply READY and end your turn".
 - If `<name>` was rotated or replaced meanwhile, deliver to the successor (same name, latest wins).
+
+**Lead's answer to a coder's QUESTION / ESCALATION / STUCK is a file first, like a VERDICT.** Before
+the SendMessage, drop it into the coder's mailbox:
+`{plugin}/scripts/team-mail.sh {run dir} coder-N lead ANSWER task <id> -- "<the answer>"`. A coder
+whose question came back `queued` waits on that file with `team-wait.sh … --kind ANSWER --task <id>`
+in the background, so a `queued` answer needs no decision from Lead: the file resumes the coder
+whichever arrives first. The tick watches this letter like any other (`undelivered_mail`).
 
 ### When an answer does not come — idle check
 
