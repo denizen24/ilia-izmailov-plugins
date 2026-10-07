@@ -397,6 +397,8 @@ this fork a script waits instead (`skills/team-feature/references/supervisor.md`
   Lead runs it in the background, ends its turn, and is woken by its return.
 - `scripts/run-state.py` / `scripts/team-mail.sh` — how teammates keep their card and drop a copy of
   each letter to Lead. Roles without Bash write the same files with `Write`.
+- `scripts/team-wait.sh <run-dir> <name> --kind VERDICT --task <id>` — a teammate waits in the
+  background for a letter in its own mailbox and is resumed when it lands.
 
 Measured on a real MEDIUM run (2026-09-24, 121-299): Lead's input tokens per wake fell from 2.18M
 to 0.93M against the same feature shape on 0.13.1. 0.14.1 fixes what that run showed: a
@@ -411,6 +413,20 @@ Claude, or an engine) reads the task, the diff of its commits and, if any, the p
 journal, runs the task's own test command and answers `ACCEPT: task #N — PASS|FAIL`. Only PASS
 makes the task DONE; a FAIL reopens it once for a fresh coder. Proxies of external engines keep
 `reports/deviations-<role>-task<id>.md` — expectation against fact — for the checker and for Phase 3.
+
+**0.16.0 — an awaited answer is a file, not only a message.** On the 121-374 run (17 tasks, 18
+coders) about twelve verdicts reached a coder that had already ended its turn, came back `queued` and
+were lost until Lead resent them by hand. Now the reviewer writes its verdict to
+`mail/<coder>/…_VERDICT_task<id>.md` before messaging, and the coder waits on it with
+`scripts/team-wait.sh` in the background — a finished background job always resumes it. The coder
+also drops a copy of each REVIEW into `mail/unified-reviewer/`. The tick reports `undelivered_mail`
+(P0) for a letter its addressee has neither marked seen nor followed with a card update within two
+minutes. Also: the acceptance checker is Claude only (a read-only engine cannot run the tests and
+failed a task for it) and gets the approved deviations from DECISIONS.md; PLAN.md may carry a
+`Commit:` line that coders use verbatim; a proxy checks the size of every report file against the
+engine's result; a teammate that stamped `startedAt` has no first-minute alarm; run and root paths
+are made absolute; a feature built from a mockup gets `## Visual Checks` in Phase 3; follow-up fixes
+are classified on their own (almost always SIMPLE).
 
 Tests: `python3 -m unittest discover -s scripts/tests` from `plugins/agent-teams`.
 
@@ -434,7 +450,13 @@ agent-teams/
 │   └── unified-reviewer.md
 ├── scripts/
 │   ├── engine-sessions.py
-│   └── run-engine.sh
+│   ├── run-engine.sh
+│   ├── run-state.py
+│   ├── supervisor-tick.py
+│   ├── supervisor-wait.sh
+│   ├── team-mail.sh
+│   ├── team-wait.sh
+│   └── tests/
 ├── skills/
 │   ├── conventions/
 │   │   └── SKILL.md
@@ -448,7 +470,9 @@ agent-teams/
 │           ├── engines.md
 │           ├── phase1-planning.md
 │           ├── phase2-monitoring.md
-│           └── phase3-verification.md
+│           ├── phase3-verification.md
+│           ├── supervisor.md
+│           └── team-runtime.md
 ├── agent-teams.example.json
 └── README.md
 ```

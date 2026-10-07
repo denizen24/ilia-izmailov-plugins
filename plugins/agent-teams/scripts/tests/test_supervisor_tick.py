@@ -301,6 +301,110 @@ class Engines(unittest.TestCase):
         self.assertEqual(f.kinds(), [("P4", "ok", "")])
 
 
+class FirstMinuteAfterStart(unittest.TestCase):
+    def test_a_participant_that_stamped_started_at_is_working_not_silent(self):
+        # 121-374: кодер поставил startedAt и три минуты читал код — тик звал ведущего зря
+        f = Fixture(self)
+        f.run_card("coder-3", spawnedAt=iso(NOW - timedelta(seconds=230)), startedAt=iso(NOW - timedelta(seconds=200)),
+                   lastEventAt=iso(NOW - timedelta(seconds=200)))
+        self.assertEqual(f.kinds(), [("P4", "ok", "")])
+
+
+class PeerMail(unittest.TestCase):
+    """Письма участникам: вердикт кодеру, REVIEW рецензенту."""
+
+    def letter(self, f, box, frm, kind, minutes_ago, name):
+        (f.run / "mail" / box).mkdir(parents=True, exist_ok=True)
+        (f.run / "mail" / box / name).write_text(
+            f"from: {frm}\nkind: {kind}\ntask: 3\nts: {iso(NOW - timedelta(minutes=minutes_ago))}\n\nAPPROVED, 0 issues\n",
+            encoding="utf-8")
+
+    def test_a_verdict_the_coder_never_took_is_p0(self):
+        f = Fixture(self)
+        f.run_card("coder-3", status="in_review", startedAt=iso(NOW - timedelta(minutes=9)), lastEventAt=iso(NOW - timedelta(minutes=6)))
+        self.letter(f, "coder-3", "unified-reviewer", "VERDICT", 3, "v.md")
+        acts = f.tick()["actions"]
+        self.assertEqual((acts[0]["priority"], acts[0]["kind"], acts[0]["run"]), ("P0", "undelivered_mail", "coder-3"))
+        self.assertEqual(acts[0]["ref"], "mail/coder-3/v.md")
+
+    def test_a_fresh_letter_gets_two_minutes(self):
+        f = Fixture(self)
+        f.run_card("coder-3", status="in_review", startedAt=iso(NOW - timedelta(minutes=9)), lastEventAt=iso(NOW - timedelta(minutes=6)))
+        self.letter(f, "coder-3", "unified-reviewer", "VERDICT", 1, "v.md")
+        self.assertEqual(f.kinds(), [("P4", "ok", "")])
+
+    def test_a_letter_marked_seen_is_delivered(self):
+        f = Fixture(self)
+        f.run_card("coder-3", status="in_review", startedAt=iso(NOW - timedelta(minutes=9)), lastEventAt=iso(NOW - timedelta(minutes=6)))
+        self.letter(f, "coder-3", "unified-reviewer", "VERDICT", 3, "v.md")
+        (f.run / "mail" / "coder-3" / ".seen").write_text("v.md\n", encoding="utf-8")
+        self.assertEqual(f.kinds(), [("P4", "ok", "")])
+
+    def test_a_card_event_after_the_letter_means_delivered(self):
+        # рецензент без Bash .seen не ведёт — он пишет карточку `reviewing`
+        f = Fixture(self)
+        f.run_card("unified-reviewer", role="reviewer", task="3", status="reviewing",
+                   lastEventAt=iso(NOW - timedelta(minutes=2)))
+        self.letter(f, "unified-reviewer", "coder-3", "REVIEW", 4, "r.md")
+        self.assertNotIn("undelivered_mail", [a[1] for a in f.kinds()])
+
+    def test_a_review_request_to_an_idle_reviewer_is_p0(self):
+        f = Fixture(self)
+        f.run_card("unified-reviewer", role="reviewer", task="", status="idle",
+                   lastEventAt=iso(NOW - timedelta(minutes=20)))
+        self.letter(f, "unified-reviewer", "coder-3", "REVIEW", 5, "r.md")
+        self.assertIn(("P0", "undelivered_mail", "unified-reviewer"), f.kinds())
+
+    def test_lead_ack_silences_it(self):
+        f = Fixture(self)
+        f.run_card("coder-3", status="in_review", startedAt=iso(NOW - timedelta(minutes=9)), lastEventAt=iso(NOW - timedelta(minutes=6)))
+        self.letter(f, "coder-3", "unified-reviewer", "VERDICT", 3, "v.md")
+        st.ack(f.run, "mail/coder-3/v.md")
+        self.assertEqual(f.kinds(), [("P4", "ok", "")])
+
+    def test_a_letter_to_a_finished_participant_is_not_chased(self):
+        f = Fixture(self)
+        f.run_card("coder-3", status="done", lastEventAt=iso(NOW - timedelta(minutes=6)))
+        self.letter(f, "coder-3", "unified-reviewer", "VERDICT", 3, "v.md")
+        self.assertEqual(f.kinds(), [("P4", "ok", "")])
+
+
+class Paths(unittest.TestCase):
+    def test_a_relative_run_dir_works(self):
+        f = Fixture(self)
+        f.run_card("coder-3")
+        cwd = os.getcwd()
+        try:
+            os.chdir(f.root)
+            snap = st.tick(Path(".claude/teams/feature-x"), None, NOW)
+        finally:
+            os.chdir(cwd)
+        self.assertEqual([a["kind"] for a in snap["actions"]], ["ok"])
+
+
+class TeamWait(unittest.TestCase):
+    SCRIPT = HERE.parent / "team-wait.sh"
+
+    def wait(self, f, *args):
+        return subprocess.run(["bash", str(self.SCRIPT), str(f.run), "coder-3", "--interval", "1", *args],
+                              capture_output=True, text=True, timeout=20).stdout
+
+    def test_returns_the_matching_letter_once(self):
+        f = Fixture(self)
+        f.mail("coder-3", "unified-reviewer", "VERDICT", "3", "APPROVED", name="a.md")
+        out = self.wait(f, "--kind", "verdict", "--task", "3", "--max", "3")
+        self.assertIn("MAIL:", out)
+        self.assertIn("APPROVED", out)
+        self.assertIn("a.md", (f.run / "mail" / "coder-3" / ".seen").read_text(encoding="utf-8"))
+        self.assertIn("TIMEOUT", self.wait(f, "--kind", "VERDICT", "--max", "1"))
+
+    def test_skips_other_tasks_and_kinds(self):
+        f = Fixture(self)
+        f.mail("coder-3", "unified-reviewer", "VERDICT", "4", "other task", name="a.md")
+        f.mail("coder-3", "lead", "RESEND", "3", "other kind", name="b.md")
+        self.assertIn("TIMEOUT", self.wait(f, "--kind", "VERDICT", "--task", "3", "--max", "1"))
+
+
 class Ordering(unittest.TestCase):
     def test_actions_are_sorted_by_priority(self):
         f = Fixture(self)

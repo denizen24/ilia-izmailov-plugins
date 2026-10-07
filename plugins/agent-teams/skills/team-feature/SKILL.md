@@ -158,6 +158,12 @@ Classify after researchers return. Follow the detailed algorithm in `references/
 | **MEDIUM** (2-3 MEDIUM triggers, 0 COMPLEX) | Lead + Coder(s) + Reviewer + Tech Lead + Risk Testers | 4+ |
 | **COMPLEX** (4+ MEDIUM or 1+ COMPLEX trigger) | Lead + 3 Architects (debate, then stand down) + Reviewer + Coder(s) + Researchers + Risk Testers | 5-8+ |
 
+**Follow-up runs are classified on their own.** Fixes after a release of a planned feature (a review
+remark, a broken detail, a missed mockup item) are a new run with the parent's PLAN.md and
+DECISIONS.md as context, and the triggers are counted on the fix, not on the parent feature — almost
+always SIMPLE. On the 121-374 run every post-release fix went that way; re-running the architect
+debate for a background colour would have cost more than the whole fix.
+
 **Why architects do not review on COMPLEX:** they are cheap in debate and expensive in review, because by review time they carry the whole debate transcript. Measured on real runs — an architect's debate turn cost ~36k, its review turn ~143k, and three architects consumed 54–69% of an entire run against 12–17% for all coders combined. So the debate stays, the tenure ends: architects hand over a domain review brief, and a fresh reviewer starts narrow and stays narrow.
 
 ## Protocol Overview
@@ -275,7 +281,7 @@ Per-run artifacts live in `.claude/teams/{team-name}/`:
 | `reports/` | Review findings, architect debate rounds, researcher / risk / verifier reports | Reviewers, architects, Lead |
 | `engine/` | Prompts, session ids and raw output of external CLI runs | Proxy teammates, Lead |
 | `runs/` | One card per teammate (`runs/<name>.json`): role, task, status, time of its last event, watch interval | Lead creates it at spawn (`scripts/run-state.py new`); the teammate updates it (`run-state.py set` or Write) |
-| `mail/` | Letter copies, one file each (`mail/<to>/<ts>_<from>_<KIND>.md`); `mail/lead/` is what the supervisor reads | Teammates (`scripts/team-mail.sh` or Write) |
+| `mail/` | Letters, one file each (`mail/<to>/<ts>_<from>_<KIND>.md`); `mail/lead/` — copies for Lead; `mail/<teammate>/` — REVIEW requests and VERDICTs the addressee waits on (`scripts/team-wait.sh`, `.seen`); the supervisor reads both | Teammates (`scripts/team-mail.sh` or Write) |
 | `state/` | `supervisor.json` (the tick's snapshot and memory), `acked.log` (letters Lead answered) | `scripts/supervisor-tick.py`, Lead (`ack`) |
 | `ledger.jsonl` | One line per external engine run: role, task, session id, outcome. **The address of the engine's own recording** — Codex, Kimi, Grok and Cursor each keep the full conversation themselves, so this is what makes theirs findable and resumable. Rebuildable with `scripts/engine-sessions.py` | `scripts/run-engine.sh` (`launch`, `done`/`failed`); the caller adds `relayed`, `checks_done`, `committed` |
 | root | `PLAN.md` (the task list — Lead only), `state.md`, `pending.log` (copies flagged `QUEUED`), `DECISIONS.md`, `VERIFICATION_PLAN.md`, `VERIFICATION_REPORT.md`, `LEGACY_REPORT.md` | Lead, Tech Lead / Primary Architect |
@@ -294,6 +300,8 @@ Rules:
 - **One file = one coder** — never assign overlapping files to different coders.
 - **Definition of Done** — defined in VERIFICATION_PLAN.md (the single "is it done?" document).
 - **Verify before shutdown** — all auto-checks must pass (or be exhausted after 3 fix attempts) before declaring completion.
+- **A failed script stops the chain** — Lead never joins release steps with `&&` past a step that can refuse (version bump, tag, migration): a refusal that does not stop the chain still commits and tags the wrong thing (121-374: a burned version number).
+- **Check what the user will see, per changed mechanism, not per task** — before calling a release ready, Lead lists every mechanism the run changed (a version constant, a price, a document version, a media file) and checks the place where a user meets it. A plan can scope a task correctly and still leave the page that shows the result untouched (121-374: a new offer version live while the offer page kept the old text).
 
 ## Reference Files
 

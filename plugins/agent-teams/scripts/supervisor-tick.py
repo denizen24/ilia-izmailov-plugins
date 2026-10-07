@@ -18,7 +18,8 @@
 действия. Код выхода всегда 0, кроме поломки окружения (нет каталога).
 
 Приоритеты (от срочного к фоновому):
-  P0  доставить копию `queued`; участник STUCK / ENGINE_DOWN / прокси мёртв;
+  P0  доставить копию `queued`; письмо участнику лежит дольше двух минут, а адресат
+      его не взял (undelivered_mail); участник STUCK / ENGINE_DOWN / прокси мёртв;
       движок упал или досчитал, а результат никто не забрал; участник молчит
       дольше двух интервалов
   P1  DONE участника, которого ведущий ещё не отметил в PLAN.md (accept_needed);
@@ -29,14 +30,22 @@
   P3  контрольная точка: с последнего события прошёл интервал участника
   P4  всё тихо
 
-Первая минута считается от `startedAt` карточки — его ставит сам участник первым
-`run-state.py set … status=running`; пока его нет, от `spawnedAt` (ведущий создаёт
-карточку до спавна, и между ними бывают минуты). Каждая тревога первой минуты
+Первая минута ловит спавн, который так и не начал работать. Участник, сам
+поставивший `startedAt` (первый `run-state.py set … status=running`), уже работает —
+дальше он читает файлы и может минутами не давать других признаков; тревога ему не
+нужна (прогон 121-374: ложное P1 на кодера, читавшего код 3 минуты). Без `startedAt`
+первая минута считается от `spawnedAt`. Каждая тревога первой минуты
 звучит один раз (память тика); дальше участник под обычным надзором: контрольная
 точка через интервал, `silent_too_long` через два. Роль без задачи (рецензент,
 техлид до первого запроса) первой минуты не имеет — она ждёт, а не молчит.
 «Правки в файлах задачи» — файлы с mtime внутри окна, а не `git status`: правка,
 сделанная час назад и не закоммиченная, участника живым не делает.
+
+Письма участникам (mail/<имя>/, не lead): вердикт рецензента кодеру, REVIEW кодера
+рецензенту. Письмо доставлено, если адресат отметил его в mail/<имя>/.seen
+(`team-wait.sh`) или после письма обновил свою карточку (lastEventAt новее письма).
+Иначе через две минуты — P0 undelivered_mail: SendMessage вернулся `queued` и
+потерялся, адресат стоит. Ведущий шлёт RESEND с текстом файла и делает `ack`.
 
 Использование:
   supervisor-tick.py <run-dir> [--root <корень репозитория>] [--json] [--now ISO]
@@ -53,6 +62,7 @@ FIRST_MINUTE_SEC = 60          # после этого ждём признако
 FIRST_MINUTE_LOUD_SEC = 180    # молчание дольше — уже P1
 DEFAULT_CHECK_SEC = 900        # контрольная точка по умолчанию, 15 мин
 PENDING_STALE_SEC = 120        # OPEN в pending.log старше двух минут — P0
+UNDELIVERED_SEC = 120          # письмо участнику не взято две минуты — P0
 ENGINE_UNREAD_SEC = 900        # движок досчитал, а результат не забрали 15 мин
 LIVE = ("running", "in_review", "fixing", "reviewing")
 NEEDS_ANSWER = ("QUESTION", "ESCALATION", "SENSITIVE", "QUEUED", "REVIEW_LOOP")
@@ -138,9 +148,25 @@ def read_mail(run_dir, box):
             if line.strip():
                 body_first = line.strip()
                 break
+        try:
+            mtime = datetime.fromtimestamp(f.stat().st_mtime, tz=timezone.utc)
+        except OSError:
+            continue
         letters.append({"file": f.name, "from": head.get("from", ""), "kind": head.get("kind", "").upper(),
-                        "task": head.get("task", ""), "ts": head.get("ts", ""), "first": body_first})
+                        "task": head.get("task", ""), "ts": head.get("ts", ""), "first": body_first,
+                        "at": parse_ts(head.get("ts")) or mtime})
     return letters
+
+
+def mail_boxes(run_dir):
+    """Почтовые ящики участников — все каталоги mail/, кроме ящика ведущего."""
+    folder = run_dir / "mail"
+    return sorted(d.name for d in folder.iterdir() if d.is_dir() and d.name != "lead") if folder.is_dir() else []
+
+
+def seen(run_dir, box):
+    f = run_dir / "mail" / box / ".seen"
+    return set(f.read_text(encoding="utf-8").split()) if f.exists() else set()
 
 
 def acked(run_dir):
@@ -224,7 +250,7 @@ def touched_since(root, files, since):
 
 
 def tick(run_dir, root=None, now=None):
-    run_dir = Path(run_dir)
+    run_dir = Path(run_dir).resolve()
     if not run_dir.is_dir():
         raise SystemExit(f"supervisor-tick: нет каталога прогона {run_dir}")
     now = now or datetime.now(timezone.utc).astimezone()
@@ -266,6 +292,24 @@ def tick(run_dir, root=None, now=None):
         add("P1", "accept_needed", run=letter["from"], detail=f"task {task}: {letter['first']} (PLAN: {status or 'нет задачи'})",
             ref=f"mail/lead/{letter['file']}")
 
+    # ---- письма участникам: лежит, а адресат не взял (SendMessage ушёл `queued` и пропал)
+    for box in mail_boxes(run_dir):
+        card = runs.get(box, {})
+        if str(card.get("status", "")) in ("done", "stopped"):
+            continue   # адресат закончил: письмо ему уже не нужно, ротацию ведёт ведущий
+        card_at = parse_ts(card.get("lastEventAt"))
+        taken = seen(run_dir, box)
+        for letter in read_mail(run_dir, box):
+            if letter["file"] in taken or letter["file"] in done_ack:
+                continue
+            if card_at and card_at >= letter["at"]:
+                continue
+            age = int((now - letter["at"]).total_seconds())
+            if age >= UNDELIVERED_SEC:
+                add("P0", "undelivered_mail", run=box,
+                    detail=f"{letter['kind'] or 'письмо'} от {letter['from'] or '?'} лежит {age // 60} мин, адресат не взял: {letter['first']}",
+                    ref=f"mail/{box}/{letter['file']}")
+
     # ---- приёмка: отчёт проверяющего лежит, а ведущий ещё не вынес решение
     for task, info in tasks.items():
         if info["status"].startswith("ACCEPTING"):
@@ -304,7 +348,7 @@ def tick(run_dir, root=None, now=None):
         files = run.get("files") or tasks.get(task, {}).get("files", [])
 
         # первая минута — только у роли с задачей, и каждая тревога один раз
-        if not task:
+        if not task or run.get("startedAt"):
             firsts[name] = "ok"
         if age is not None and firsts.get(name) not in ("ok", "p1"):
             alive = (last and spawned and last > spawned) or name in signals_from or touched_since(root, files, spawned) \

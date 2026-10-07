@@ -93,7 +93,15 @@ Read VERIFICATION_PLAN.md and parse sections by `##` headers:
 | `## Tests` | ci-verifier |
 | `## Browser Checks` | browser-verifier |
 | `## Spec Checks` | spec-verifier |
+| `## Visual Checks` | design-critic (`ux-ui-agent-skills`) if installed, otherwise browser-verifier — see 5c |
 | `## Human Checks` | reported as-is (no agent) |
+
+**A feature built from a mockup or a design file always gets `## Visual Checks`** — Lead adds it to
+VERIFICATION_PLAN.md in step 4 if the plan has none: one item per page/section that has a mockup,
+naming the mockup file and the page URL. Tests and spec checks prove the code does what the plan
+says; only a look at the rendered page proves it looks like the mockup. On the 121-374 run three
+things reached the user that no other check could see — a pale hero background, a page left without
+its media, an animation still jerking like the old GIF — and each one cost a release.
 
 - Only process `- [ ]` items (unchecked). Skip `- [x]` items.
 - Warn on unknown `##` sections — items will be skipped.
@@ -131,7 +139,18 @@ Task(subagent_type="agent-teams:spec-verifier",
   prompt="Verify these spec checks:
 {all items from Spec Checks section}
 Report per check with evidence.")
+
+Task(subagent_type="ux-ui-agent-skills:design-critic",   # or agent-teams:browser-verifier
+  prompt="Visual check against the mockup. For each item: open the page at desktop and phone width,
+take a screenshot, open the mockup file, and compare section by section — backgrounds, media present
+and playing as the mockup shows, order of blocks, text. Save screenshots to
+.claude/teams/{team-name}/reports/visual/. Report per item PASS/FAIL with the screenshot path
+and what differs.
+{all items from Visual Checks section}")
 ```
+
+A Visual Checks FAIL goes into the fix loop like any other; an item the verifier could not render
+(no browser, server down) is BROKEN and goes to Human Checks with the screenshot paths it did take.
 
 **Status taxonomy** (all verifiers use this unified 7-status system):
 

@@ -132,10 +132,30 @@ If no issues:
 
 Before you send anything, write the full review (format above) to
 `.claude/teams/{team-name}/reports/review-task{id}-unified-r{round}.md`.
-Then message the coder a short digest: the verdict, counts per severity, and the file path.
-File first, message second, every time — the full findings live in the file, not in the message.
-Write is scoped to that reports directory, your run card and your mail copies (next section) and nothing
-else: your read-only boundary on source code stays absolute.
+Then put the digest into the coder's mailbox as a file — `Write`
+`.claude/teams/{team-name}/mail/{coder name}/{YYYYMMDDTHHMMSS}_unified-reviewer_VERDICT_task{id}.md`:
+
+```
+from: unified-reviewer
+kind: VERDICT
+task: {id}
+ts: {now, ISO with offset}
+
+{the same short digest you are about to send: verdict, counts per severity, the review file path}
+```
+
+Only then message the coder the same digest. The coder waits on that file in the background
+(`team-wait.sh`), so a message that comes back `queued` costs nothing: the file still resumes it, and
+if neither happens the supervisor sees the unread file and wakes Lead. On the 121-374 run, before
+this file existed, about twelve verdicts were lost and resent by hand.
+Review file first, verdict file second, message third, every time.
+Write is scoped to that reports directory, your run card, your mail copies to Lead and the verdict
+files in coders' mailboxes (next section) and nothing else: your read-only boundary on source code
+stays absolute.
+
+**You cannot run the tests, so never state that they pass.** "Tests green" in a coder's message is a
+claim, not your finding; write `Tests: not run by the reviewer (coder reports green)` if you mention
+them. The acceptance checker runs the task's test command on the diff — that is where it is proven.
 
 ## Supervisor — your card and your mail copies
 
@@ -149,8 +169,10 @@ have no Bash, so you keep your card with `Write`, whole file each time:
  "lastEventAt": "{now, ISO with offset}", "note": "task {id} r{round}"}
 ```
 
-Write it with `status: "reviewing"` when you start a review, and again with `status: "idle"` (task
-empty) after you sent the digest. Keep `spawnedAt` if the file already has one. Lead creates the
+Write it with `status: "reviewing"` **the moment a REVIEW request reaches you, before you read any
+code** — that write is how the supervisor knows the request was delivered (a file copy of every
+REVIEW lies in `mail/unified-reviewer/`; one that sits there older than your card reads as lost and
+wakes Lead). Write it again with `status: "idle"` (task empty) after you sent the digest. Keep `spawnedAt` if the file already has one. Lead creates the
 card as `idle` — a role without a task is waiting, not silent, so nothing watches you until your
 first review; your READY needs no card write.
 
@@ -166,7 +188,8 @@ ts: {now, ISO with offset}
 {the same text you sent}
 ```
 
-Digests to coders need no copy.
+Digests to coders get the verdict file described in "Write Your Findings to a File First" — that
+file is the copy.
 
 ## SendMessage Protocol
 

@@ -211,6 +211,20 @@ script never overwrites an existing report: a second copy gets a `-{label}` suff
 relay the short verdict after the file exists. Do not pass the write instruction through: under
 `cursor --mode ask` the engine refuses and spends the turn discovering that.
 
+**Check every report file you wrote or the script saved — before you relay anything.** One Bash call:
+`wc -c {report} {out}.result.md`. A verbatim file (round file, second-opinion findings) must be at
+least 90% of the result's size; a triaged review file must hold the findings, not just headings
+(`grep -c '^- \|^### ' {report}` above zero when the verdict has findings). If it falls short, write
+it again from `{out}.result.md` — copy the body with `cp`/`cat >>`, never retype it from memory.
+On the 121-374 run an architect proxy twice wrote a round file that held only its heading; the debate
+went on without that architect's arguments until Lead noticed.
+
+**Carrying `unified-reviewer`:** its verdict goes to the coder's mailbox as a file before the message
+(`unified-reviewer.md`, "Write Your Findings to a File First") — with your Bash that is
+`{plugin}/scripts/team-mail.sh {run dir} {coder name} unified-reviewer VERDICT task {id} -- "<digest>"`,
+and the run card is `run-state.py set {run dir} unified-reviewer status=reviewing task={id}` the
+moment a REVIEW reaches you.
+
 **Immediately after launching, tell Lead where to look.** Do not estimate how long it will take —
 report only checkable facts, copied from the script's output:
 

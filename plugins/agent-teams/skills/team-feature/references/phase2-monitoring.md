@@ -49,11 +49,11 @@ acceptance: a task is DONE when a **one-shot checker that has read nothing but t
 confirms every acceptance criterion in PLAN.md. That is the porch rule "the parent owns the
 acceptance", and it is why the criteria in PLAN.md have to be checkable (`phase1-planning.md`).
 
-The checker is the `acceptance-checker` role (`engines.md`): on `claude` it is a
-`Task(subagent_type="agent-teams:spec-verifier", ...)` with the prompt below; on an external engine
-the same prompt goes through `scripts/run-engine.sh` with `--report accept-task{id}.md` and the diff
-in a file (Mechanic A, no `sudo`, no `git` in the prompt). Lead spawns it and goes back to sleep on
-the loop: the loop wakes Lead with `accept_result` the moment `reports/accept-task{id}.md` exists.
+The checker is the `acceptance-checker` role (`engines.md`), and it is **always Claude**: a
+`Task(subagent_type="agent-teams:spec-verifier", ...)` with the prompt below, in the background. An
+external engine in read-only mode cannot run the task's tests, and a checker that cannot run them
+fails the task for it (121-374: a false FAIL from Cursor `--mode ask`). Lead spawns it and goes back
+to sleep on the loop; on its return Lead writes `reports/accept-task{id}.md` and acts on the first line.
 
 Before the spawn, one Bash call writes the diff — the task's commits, which the DONE digest names:
 
@@ -71,6 +71,9 @@ not need them.
 {the whole ## Task {id} section}
 --- END TASK ---
 Diff of the task's commit(s): {path of accept-task{id}.diff}   (commits {shas}; do not rebuild it)
+Approved deviations (Lead copies them from DECISIONS.md — every entry that names this task or its
+files; "none" if there are none): {entries, verbatim}
+A criterion met the way an approved deviation says is PASS — the deviation replaced the plan's wording.
 Deviation journal, if the task ran on an external engine: .claude/teams/{team-name}/reports/deviations-*-task{id}.md — read it if it exists; a deviation the coder did not resolve is a FAIL on the criterion it touches.
 Out of scope (from the contract): {nonGoals}
 

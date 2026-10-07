@@ -23,7 +23,7 @@ Canonical role IDs. These are the keys usable in the config `roles` block.
 | `risk-tester` | one-shot | Phase 1 Step 4b | claude, codex, cursor |
 | `ci-verifier` | one-shot | Phase 3 Step 5c | claude, codex, cursor |
 | `spec-verifier` | one-shot | Phase 3 Step 5c | claude, codex, cursor |
-| `acceptance-checker` | one-shot, per coding task | Phase 2, on every DONE (`phase2-monitoring.md`, "Accepting a DONE") | claude (spawned as `agent-teams:spec-verifier`), codex, cursor |
+| `acceptance-checker` | one-shot, per coding task | Phase 2, on every DONE (`phase2-monitoring.md`, "Accepting a DONE") | **claude only** (spawned as `agent-teams:spec-verifier`) — it must run the task's tests; a read-only engine cannot, and on the 121-374 run Cursor `--mode ask` returned a false FAIL for exactly that. A config entry for this role is ignored with one line to the user. |
 | `browser-verifier` | one-shot | Phase 3 Step 5c | **claude only** (needs Chrome MCP) |
 | `legacy-scanner` | one-shot | Phase 3 Step 6 | claude, codex, cursor |
 | `tech-lead` | teammate | Phase 1 Step 4b (MEDIUM) | claude, codex, kimi, grok, cursor |

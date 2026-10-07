@@ -7,7 +7,7 @@ description: |
   Context: Coder requests review from the one team reviewer
   assistant: "SendMessage to unified-reviewer: REVIEW: task #3. Files changed: src/server/routers/settings.ts" — result `Resuming agent`, so it is delivered; then ends its turn
   <commentary>
-  Coder drives the review loop and messages the reviewer directly; Lead is not involved unless the send comes back `queued`. The coder ends its turn and is resumed by the verdict.
+  Coder drives the review loop and messages the reviewer directly; Lead is not involved unless the send comes back `queued`. The coder starts `team-wait.sh` in the background for the verdict file and ends its turn; the verdict (message or file, whichever comes first) resumes it.
   </commentary>
   </example>
 
@@ -145,10 +145,26 @@ SendMessage(to="unified-reviewer", message="REVIEW: task #3. Files changed: src/
 ```
 If the result says `queued for delivery`, also send Lead: `QUEUED: unified-reviewer` + the same text.
 
-Right after the request: `run-state.py set … status=in_review` and a mail copy of the `IN_REVIEW`
-line to Lead (see "Supervisor" below) — that is how the supervisor knows you are waiting, not idle.
+Right after the request, three commands:
 
-**Then end your turn and wait for the review.** The verdict arrives from unified-reviewer and resumes you. Do not poll, and do not commit before it arrives.
+1. `run-state.py set … status=in_review` and a mail copy of the `IN_REVIEW` line to Lead (see
+   "Supervisor" below) — that is how the supervisor knows you are waiting, not idle.
+2. A file copy of the request for the reviewer:
+   `{plugin}/scripts/team-mail.sh {run dir} unified-reviewer coder-{N} REVIEW task {id} -- "<the same REVIEW text>"`.
+   If your message came back `queued` and was lost, the supervisor sees the file lying unread and
+   wakes Lead to deliver it.
+3. **The verdict waiter, in the background** (`run_in_background: true`):
+   `{plugin}/scripts/team-wait.sh {run dir} coder-{N} --kind VERDICT --task {id}`.
+   The reviewer writes its verdict to your mailbox as a file *before* messaging you. A message that
+   reaches you after you ended your turn can come back `queued` and never arrive — on the 121-374
+   run that happened about twelve times, each one a coder standing still until Lead resent it by
+   hand. The waiter's completion always resumes you; with it the next run had no lost verdicts.
+
+**Then end your turn.** The verdict resumes you — as the reviewer's message or as the waiter's output,
+whichever comes first; they carry the same verdict, so act on the first and ignore the second (if the
+message came first, the waiter will finish later with the same file — read its first line and go on).
+Do not poll in the foreground, and do not commit before the verdict arrives. `TIMEOUT` from the
+waiter means an hour without a verdict: send Lead `QUESTION: task {id}. No verdict for an hour.`
 
 ### Step 6: Escalation protocol
 
@@ -167,7 +183,10 @@ If a gold standard pattern doesn't fit your specific case:
 
 **Review round limit:** If you've gone through 3+ review rounds on the same task (the reviewer keeps finding issues), escalate with a `REVIEW_LOOP` message summarizing the repeated issue (format and recipient in the Communication Protocol table).
 
-**Roster update:** If Lead sends a ROSTER UPDATE mid-review (the reviewer was replaced) and you are still waiting for a verdict, re-send your REVIEW request directly to the name in the update — with the same `queued` rule.
+**Roster update:** If Lead sends a ROSTER UPDATE mid-review (the reviewer was replaced) and you are still waiting for a verdict, re-send your REVIEW request directly to the name in the update — with the same `queued` rule, the same file copy to its mailbox, and a fresh waiter if the old one has finished.
+
+**Every later round** (you re-request review after fixes) repeats Step 5's three commands — the
+waiter only returns a verdict file it has not shown you before.
 
 When the verdict arrives: `run-state.py set … status=fixing note="r{N}: {counts}"` before you touch
 anything (a verdict is an event; the supervisor counts silence from the last one).
@@ -182,6 +201,10 @@ After fixing all CRITICAL/MAJOR issues:
 When the reviewer has approved and all CRITICAL/MAJOR issues are fixed:
 
 1. **Stage ONLY your own files explicitly by path.** Use `git add <file1> <file2> ...` with exact paths from your task. NEVER use `git add .`, `git add -A`, or `git add -u` — multiple agent teams may run in parallel locally, and these can sweep up other teams' uncommitted work into your commit.
+   **If PLAN.md has a `Commit:` line in its header, it overrides the commands here — use it verbatim**
+   (for example `sudo -u admin git commit -F <msg file> -- <paths>`: the repository belongs to a
+   deploy user, and a commit made as root leaves `.git/` files the deploy cannot write — 336 of them
+   on the 121-374 run). The same line names the commit identity; never pass `-c user.*` yourself.
 2. **Commit with an explicit pathspec too: `git commit -m <message> -- <file1> <file2> ...`.**
    Staging carefully is not enough — the index is shared. A parallel coder that runs `git add`
    between your `add` and your `commit` lands its files in *your* commit, and nothing warns you
@@ -234,7 +257,8 @@ what you write down:
   `python3 {plugin}/scripts/run-state.py set {run dir} coder-{N} status=<in_review|fixing|done|stuck> [note="..."]`.
   Every `set` stamps the time; a card that stays unchanged for two intervals, with no task file
   touched in that window, reads as a dead coder.
-- **Never end a turn with a background job as the only thing that would resume you.** Run
+- **Never end a turn with a background job as the only thing that would resume you** — except
+  `team-wait.sh`, which always finishes (a letter or its `--max`). Run
   self-checks and the full test suite in the foreground with a timeout (`timeout 900 …`). A hung
   background test run does not resume you, and the supervisor cannot tell a sleeping coder from a
   thinking one — on 2026-09-24 that cost a run 45 minutes until Lead sent `STATUS?`.
@@ -242,7 +266,8 @@ what you write down:
   `{plugin}/scripts/team-mail.sh {run dir} lead coder-{N} <KIND> task {id} -- "<text>"`,
   KIND being the message's first word (`DONE`, `STUCK`, `QUESTION`, `ESCALATION`, `REVIEW_LOOP`,
   `QUEUED`, `IN_REVIEW`). `STUCK` also sets `status=stuck`.
-- Messages to the reviewer or tech-lead need no copy.
+- Messages to the reviewer or tech-lead need no copy **in Lead's mailbox**; the `REVIEW` request
+  gets its file copy in the reviewer's (Step 5).
 
 The copy is not a second message: nobody answers the file. It is what lets Lead recover after a
 compaction and what turns your silence into a fact instead of a guess.

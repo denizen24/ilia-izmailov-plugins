@@ -304,6 +304,8 @@ Write(".claude/teams/{team-name}/PLAN.md"):
 
 Status values: TODO → IN_PROGRESS(coder-N) → IN_REVIEW(coder-N) → ACCEPTING(coder-N) → DONE
 (REOPENED(coder-M) after one failed acceptance). Only Lead edits this file.
+Commit: {only if the repository needs it — the exact commit command and identity, e.g.
+`sudo -u admin git commit -F <msg file> -- <paths>`, signature from .git/config, trailer line}
 
 ## Task 1: Add settings API endpoint
 Status: TODO
@@ -890,6 +892,10 @@ YOUR CARD: .claude/teams/{team-name}/runs/coder-{N}.json — update it with
   python3 {plugin}/scripts/run-state.py set .claude/teams/{team-name} coder-{N} status=<in_review|fixing|done|stuck> [note=...]
 MAIL COPY of every message you send to Lead:
   {plugin}/scripts/team-mail.sh .claude/teams/{team-name} lead coder-{N} <DONE|STUCK|QUESTION|ESCALATION|QUEUED|IN_REVIEW> task {id} -- "<the same text>"
+REVIEW COPY for the reviewer's mailbox, right after each REVIEW request:
+  {plugin}/scripts/team-mail.sh .claude/teams/{team-name} unified-reviewer coder-{N} REVIEW task {id} -- "<the same text>"
+VERDICT WAITER, in the background (run_in_background: true), right after each REVIEW request:
+  {plugin}/scripts/team-wait.sh .claude/teams/{team-name} coder-{N} --kind VERDICT --task {id}
 --- END SUPERVISOR ---
 
 Start working on your task."
@@ -959,6 +965,7 @@ Your role: listen for DONE/STUCK/ESCALATE; deliver QUEUED copies once the recipi
 - Waiting is the supervisor loop's job (references/supervisor.md): after every handled wake, start
   `bash {plugin}/scripts/supervisor-wait.sh .claude/teams/{team-name} --root {repo root}` in the background and end the turn.
   On a wake, act on the printed actions by priority; `ack` answered letters; never poll by hand.
+  `undelivered_mail` = a teammate's letter lies unread in mail/<name>/: SendMessage it as `RESEND: from <sender>` with the file's text, then `ack` the file name.
 - Before ending a turn while work is unfinished and no teammate is running: idle check (team-runtime.md §3) — with the loop running, the loop IS the check
 - DO NOT read code, run checks, pick reviewers, or edit messages you deliver — coders drive their own review loop
 - Update this file after each event

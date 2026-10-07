@@ -15,6 +15,9 @@ set -u
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 run="${1:-}"; shift || true
 [ -n "$run" ] && [ -d "$run" ] || { echo "supervisor-wait: нужен каталог прогона" >&2; exit 2; }
+# Абсолютный путь сразу: фоновый Bash ведущего может крутиться не в том каталоге,
+# где его запустили, и относительный путь «пропадал» на первом же тике (121-374).
+run=$(cd "$run" && pwd)
 wake="P1"; interval=20; max=3600; root=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -26,7 +29,7 @@ while [ $# -gt 0 ]; do
   esac
 done
 case "$wake" in P0|P1|P2|P3) ;; *) echo "supervisor-wait: --wake-on ждёт P0..P3" >&2; exit 2 ;; esac
-rootarg=(); [ -n "$root" ] && rootarg=(--root "$root")
+rootarg=(); [ -n "$root" ] && rootarg=(--root "$(cd "$root" && pwd)")
 started=$(date +%s)
 echo "supervisor-wait: сплю на $run, бужу на $wake и выше, тик каждые ${interval} с, не дольше ${max} с"
 while :; do
